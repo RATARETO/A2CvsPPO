@@ -34,4 +34,15 @@ vid $R/n_steps/n_steps=64/$S                 $R/n_steps/n_steps=256/$S          
 vid $R/gamma/gamma=0.9/$S                    $R/gamma/gamma=0.95/$S                    $R/gamma/gamma=0.99/$S                   $R/gamma/gamma=0.999/$S
 vid $R/gae_lambda/gae_lambda=0.8/$S          $R/gae_lambda/gae_lambda=0.9/$S           $R/gae_lambda/gae_lambda=0.99/$S         $R/gae_lambda/gae_lambda=1/$S
 
+if [ -d "$R/grid_lr_clip" ]; then
+  echo "=== Блок C: четыре угла сеток (мин+мин, мин+макс, макс+мин, макс+макс) ==="
+  vid "$R/grid_lr_clip/learning_rate=0.0001,clip_range=0.05/$S" "$R/grid_lr_clip/learning_rate=0.0001,clip_range=0.5/$S" "$R/grid_lr_clip/learning_rate=0.01,clip_range=0.05/$S" "$R/grid_lr_clip/learning_rate=0.01,clip_range=0.5/$S"
+fi
+if [ -d "$R/grid_lr_epochs" ]; then
+  vid "$R/grid_lr_epochs/learning_rate=0.0001,n_epochs=3/$S" "$R/grid_lr_epochs/learning_rate=0.0001,n_epochs=40/$S" "$R/grid_lr_epochs/learning_rate=0.01,n_epochs=3/$S" "$R/grid_lr_epochs/learning_rate=0.01,n_epochs=40/$S"
+fi
+if [ -d "$R/grid_gamma_lambda" ]; then
+  vid "$R/grid_gamma_lambda/gamma=0.95,gae_lambda=0.9/$S" "$R/grid_gamma_lambda/gamma=0.95,gae_lambda=1/$S" "$R/grid_gamma_lambda/gamma=0.999,gae_lambda=0.9/$S" "$R/grid_gamma_lambda/gamma=0.999,gae_lambda=1/$S"
+fi
+
 echo "Готово. Видео в папке videos/"

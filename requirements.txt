@@ -1,4 +1,4 @@
-# Python: 3.10.11
+# Python: 3.10
 # Reproduces the CartPole PPO part of the Lux AI "RL with Lux: 1 - Intro to RL" tutorial
 # with the current Gymnasium/SB3 API and extends it to a PPO vs A2C research framework.
 gymnasium[classic-control]==1.4.0

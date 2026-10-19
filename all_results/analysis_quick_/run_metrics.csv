@@ -1,0 +1,15 @@
+algo,group,name,sweep_index,seed,final,auc,solved,steps_to_threshold,min_after_solve
+ppo,baseline,default,0,0,299.56,0.3269090909090909,False,,
+ppo,baseline,default,0,1,281.64,0.31581818181818183,False,,
+ppo,learning_rate,learning_rate=0.0001,1,0,157.44,0.18287272727272727,False,,
+ppo,learning_rate,learning_rate=0.0001,1,1,128.32,0.1466181818181818,False,,
+ppo,learning_rate,learning_rate=0.0003,2,0,299.56,0.3269090909090909,False,,
+ppo,learning_rate,learning_rate=0.0003,2,1,281.64,0.31581818181818183,False,,
+ppo,learning_rate,learning_rate=0.001,3,0,422.28000000000003,0.4639272727272728,True,16000.0,500.0
+ppo,learning_rate,learning_rate=0.001,3,1,431.32,0.4658545454545454,True,18000.0,497.8
+ppo,learning_rate,learning_rate=0.003,4,0,389.0,0.4481818181818182,True,18000.0,492.6
+ppo,learning_rate,learning_rate=0.003,4,1,268.03999999999996,0.32523636363636366,False,,
+ppo,learning_rate,learning_rate=0.01,5,0,260.4,0.3259636363636364,False,,
+ppo,learning_rate,learning_rate=0.01,5,1,459.48,0.5078909090909091,True,14000.0,500.0
+ppo,learning_rate,learning_rate=1e-05,0,0,27.119999999999997,0.05196363636363637,False,,
+ppo,learning_rate,learning_rate=1e-05,0,1,30.48,0.05389090909090909,False,,

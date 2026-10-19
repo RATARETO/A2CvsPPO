@@ -12,7 +12,7 @@
 
 ## 1. Установка (один раз)
 
-Python 3.10.11.
+Python 3.10.
 
 **Git Bash (Windows):**
 
@@ -103,13 +103,73 @@ Python 3.10.11.
 Видео сохраняются в `videos/` (сравнения) или в папку запуска (одиночные). Без `--sampled` агент играет «жадно»
 (самое вероятное действие) и выглядит лучше, чем на графиках: слабая нестабильность в таком видео не видна.
 
-### Шаг 6. Расширенный эксперимент на главных параметрах
+### Шаг 6. Сочетания гиперпараметров (сетки)
 
-По графику `ppo_sensitivity.png` выбери 2–3 самых влиятельных параметра, сделай серию с их комбинациями
-(см. раздел 6) и запусти с 10 сидами:
+Серии с префиксом `grid_` меняют ДВА параметра сразу (все пары значений). В `src/experiments.py` заданы три сетки:
 
-    python -m src.sweep --groups lr_x_clip --seeds 10
+| Серия | Что проверяем | Значения | Запусков (5 сидов) |
+|---|---|---|---|
+| `grid_lr_clip` | сдерживает ли малый `clip_range` большой `learning_rate` | lr: 0.0001, 0.0003, 0.001, 0.01 × clip: 0.05, 0.1, 0.2, 0.5 | 80 |
+| `grid_lr_epochs` | компенсирует ли большое число эпох малый `learning_rate` | lr: 0.0001, 0.0003, 0.001, 0.01 × n_epochs: 3, 10, 20, 40 | 80 |
+| `grid_gamma_lambda` | пара «горизонт и шум оценки» (есть и у A2C) | gamma: 0.95, 0.99, 0.999 × lambda: 0.9, 0.95, 1.0 | 45 |
+
+Всего 205 запусков. По времени ориентир около 1,5–2 часов (серия с `n_epochs=40` считается дольше): в полном свипе было
+около 2,2 запуска в минуту. Сначала посмотри план, потом запускай по очереди:
+
+    python -m src.sweep --groups grid_lr_clip grid_lr_epochs grid_gamma_lambda --list
+    python -m src.sweep --groups grid_lr_clip
+    python -m src.sweep --groups grid_lr_epochs
+    python -m src.sweep --groups grid_gamma_lambda
     python -m src.analyze
+
+(или все три сразу: `python -m src.sweep --groups grid_lr_clip grid_lr_epochs grid_gamma_lambda`).
+Для финальных цифр статьи можно повторить на 10 сидах: добавь `--seeds 10`.
+
+Новые графики в `analysis/` для каждой сетки:
+`ppo_grid_<имя>_heatmap.png` (тепловые карты шести метрик), `ppo_grid_<имя>_interaction.png` (линии AUC: если линии
+непараллельны, параметры влияют друг на друга), а также `_seeds.png` и `_diagnostics.png`.
+
+Видео-сравнения «четырёх углов» сетки (слева направо: мин+мин, мин+макс, макс+мин, макс+макс):
+
+    python -m src.render --compare "results/ppo/grid_lr_clip/learning_rate=0.0001,clip_range=0.05/seed_0" "results/ppo/grid_lr_clip/learning_rate=0.0001,clip_range=0.5/seed_0" "results/ppo/grid_lr_clip/learning_rate=0.01,clip_range=0.05/seed_0" "results/ppo/grid_lr_clip/learning_rate=0.01,clip_range=0.5/seed_0" --episodes 2 --sampled
+    python -m src.render --compare "results/ppo/grid_lr_epochs/learning_rate=0.0001,n_epochs=3/seed_0" "results/ppo/grid_lr_epochs/learning_rate=0.0001,n_epochs=40/seed_0" "results/ppo/grid_lr_epochs/learning_rate=0.01,n_epochs=3/seed_0" "results/ppo/grid_lr_epochs/learning_rate=0.01,n_epochs=40/seed_0" --episodes 2 --sampled
+    python -m src.render --compare "results/ppo/grid_gamma_lambda/gamma=0.95,gae_lambda=0.9/seed_0" "results/ppo/grid_gamma_lambda/gamma=0.95,gae_lambda=1/seed_0" "results/ppo/grid_gamma_lambda/gamma=0.999,gae_lambda=0.9/seed_0" "results/ppo/grid_gamma_lambda/gamma=0.999,gae_lambda=1/seed_0" --episodes 2 --sampled
+
+(или `bash make_compare_videos.sh`: он запишет и видео для сеток, если они посчитаны).
+
+Свои сетки: в `src/experiments.py` добавь строку
+`"grid_моё_имя": grid("параметр1", [значения], "параметр2", [значения])` — имя серии обязательно начинается с `grid_`.
+
+### Шаг 6б. Тест на прочность: модели на эпизодах длиннее 500 шагов
+
+Переобучать не нужно: используются уже сохранённые `model.zip`. Модели играют эпизоды до 2000 шагов (вместо 500) и
+показывают, кто продолжает держать шест, а кто просто дотянул до лимита.
+
+    python -m src.stress_test --groups learning_rate n_epochs --workers 5
+    python -m src.stress_test --workers 5
+
+Первая команда (две главные серии) нужна для быстрой проверки; вторая прогоняет все модели из `results/`
+(ориентир 10–20 минут при 5 процессах, это оценка). Результат: `analysis/stress_test.csv`,
+`analysis/stress_summary.csv` и графики `analysis/stress_<algo>_<серия>.png`. Параметры: `--max-steps` (лимит, по
+умолчанию 2000), `--episodes` (эпизодов на модель, по умолчанию 5), `--greedy` (дополнительно жадная политика).
+
+### Шаг 6в. Вторая среда: Acrobot-v1 (проверка, что выводы не специфичны для CartPole)
+
+Награда Acrobot отрицательная (−1 за шаг, от −500 до 0, «решено» около −100). Анализ сам приводит её к шкале 0..500
+(см. `ENV_SPECS` в `src/analyze.py`), так что графики сравнимы с CartPole. Результаты идут в отдельную папку
+`results_acrobot/`. Бюджет по умолчанию 100 000 шагов. Сначала замер на базовой серии (проверь, что среда учится и
+сколько это занимает):
+
+    python -m src.sweep --env Acrobot-v1 --groups baseline --seeds 3
+    python -m src.analyze --results results_acrobot --out analysis_acrobot
+
+Если базовая серия выходит на разумный результат, повтори главные серии (3 сида):
+
+    python -m src.sweep --env Acrobot-v1 --groups learning_rate n_epochs batch_size clip_range gamma ent_coef --seeds 3
+    python -m src.analyze --results results_acrobot --out analysis_acrobot
+
+Это около 100 запусков по 100 000 шагов; время на запуск у Acrobot заранее неизвестно (оценить можно по baseline),
+ориентир несколько часов. Тест на прочность (шаг 6б) к Acrobot не применяется.
 
 ### Шаг 7. Сравнение с A2C (когда сокомандник посчитал свои серии)
 
@@ -139,6 +199,7 @@ PowerShell:
 | Флаг | Что делает | По умолчанию |
 |---|---|---|
 | `--algo ppo\|a2c` | какой алгоритм | `ppo` |
+| `--env ИМЯ` | среда: `CartPole-v1` или `Acrobot-v1` (для Acrobot результаты идут в `results_acrobot/`) | `CartPole-v1` |
 | `--groups A B C` | какие серии запускать (несколько через пробел) | все серии |
 | `--seeds N` | сколько сидов на конфигурацию | `5` |
 | `--steps N` | переопределить бюджет шагов | из `experiments.py` |
@@ -169,6 +230,19 @@ PowerShell:
 | `--results ПАПКА` | откуда читать результаты | `results` |
 | `--out ПАПКА` | куда писать графики и таблицы | `analysis` |
 
+### `python -m src.stress_test` — тест на прочность (длинные эпизоды)
+
+| Флаг | Что делает | По умолчанию |
+|---|---|---|
+| `--results ПАПКА` | откуда читать модели | `results` |
+| `--out ПАПКА` | куда писать таблицы и графики | `analysis` |
+| `--groups A B` | только эти серии | все |
+| `--algo ppo\|a2c` | только этот алгоритм | оба |
+| `--max-steps N` | лимит длины эпизода | `2000` |
+| `--episodes N` | эпизодов на модель | `5` |
+| `--greedy` | дополнительно оценить жадной политикой | выкл. |
+| `--workers N` | параллельных процессов | `5` |
+
 ### `python -m src.render` — видео готовых моделей
 
 | Команда | Что делает |
@@ -187,7 +261,7 @@ PowerShell:
 
 | Слово | Значение | Пример |
 |---|---|---|
-| **серия** (`group`) | набор конфигураций, где меняется ОДИН параметр | `learning_rate`, `clip_range` |
+| **серия** (`group`) | набор конфигураций, где меняется один параметр (или два, если это сетка `grid_*`) | `learning_rate`, `grid_lr_clip` |
 | **конфигурация** (`name`) | одно значение параметра внутри серии | `learning_rate=0.001` |
 | **сид** (`seed`) | число, фиксирующее случайность; разные сиды = независимые повторы | `seed_0` … `seed_4` |
 | **бюджет** (`steps`, `total_timesteps`) | сколько шагов среды отводится на обучение | `50000` |
@@ -218,6 +292,15 @@ PowerShell:
 | `config_summary.csv` | таблица метрик по конфигурациям |
 | `run_metrics.csv` | таблица метрик по каждому запуску |
 | `<algo>_sensitivity.csv` | цифры чувствительности |
+
+Для сеток (серии `grid_*`) вместо `_overview.png`:
+
+| Файл | Что показывает |
+|---|---|
+| `<algo>_grid_<имя>_heatmap.png` | тепловые карты: AUC, итоговая награда, доля решивших, шаги до решения, просадка, разброс сидов |
+| `<algo>_grid_<имя>_interaction.png` | линии AUC; непараллельные линии = параметры влияют друг на друга |
+
+Тест на прочность (`stress_test`): `stress_test.csv`, `stress_summary.csv`, `stress_<algo>_<серия>.png`.
 
 Если посчитаны оба алгоритма:
 
@@ -269,7 +352,8 @@ PowerShell:
     src/callbacks.py    оценка политики каждые N шагов -> кривая обучения + диагностика
     src/train.py        run_experiment(cfg): обучение и сохранение результатов
     src/sweep.py        параллельный запуск серий
-    src/analyze.py      метрики, графики, сравнение алгоритмов
+    src/analyze.py      метрики, графики, сетки сочетаний, сравнение алгоритмов, нормировка наград сред
+    src/stress_test.py  тест на прочность: обученные модели на эпизодах длиннее 500 шагов
     src/video.py        запись видео с подписями (mp4 / gif / webm), запись бок о бок
     src/render.py       видео для уже обученных моделей
     src/main.py         демо

@@ -1,0 +1,2 @@
+group,n_values,auc_range,final_range,share_solved,worst_value,best_value
+learning_rate,6,0.4119636363636364,398.0,0.5,learning_rate=1e-05,learning_rate=0.001

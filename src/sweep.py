@@ -16,7 +16,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from .config import RESULTS_DIR, ExperimentConfig, make_config
-from .experiments import COMMON, SWEEPS
+from .experiments import ENV_COMMON, SWEEPS
 
 
 def build_configs(algo: str, groups: list[str] | None, n_seeds: int, **common) -> list[ExperimentConfig]:
@@ -46,6 +46,8 @@ def _run_one(task: tuple[dict, str, bool]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Запуск серий экспериментов")
     parser.add_argument("--algo", default="ppo", choices=sorted(SWEEPS))
+    parser.add_argument("--env", default="CartPole-v1", choices=sorted(ENV_COMMON),
+                        help="среда; для не-CartPole результаты по умолчанию идут в results_<среда>/")
     parser.add_argument("--groups", nargs="*", default=None, help="какие серии запускать (по умолчанию все)")
     parser.add_argument("--seeds", type=int, default=5, help="сколько сидов на конфигурацию")
     parser.add_argument("--steps", type=int, default=None, help="переопределить бюджет шагов")
@@ -56,8 +58,10 @@ def main() -> None:
     parser.add_argument("--list", action="store_true", help="только показать план и выйти")
     args = parser.parse_args()
 
-    common = dict(COMMON)
+    common = dict(ENV_COMMON[args.env], env_id=args.env)
     groups, n_seeds, out = args.groups, args.seeds, args.out
+    if args.env != "CartPole-v1" and not out and not args.quick:
+        out = str(RESULTS_DIR.parent / f"results_{args.env.split('-')[0].lower()}")  # например results_acrobot
     if args.quick:
         common.update(total_timesteps=20_000, eval_freq=2_000, n_eval_episodes=5)
         groups = groups or ["baseline", "learning_rate"]

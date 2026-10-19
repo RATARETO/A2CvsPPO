@@ -1,0 +1,7 @@
+group,n_values,auc_range,final_range,share_solved,worst_value,best_value
+learning_rate,6,0.4918539682539683,141.36,0.8333333333333334,learning_rate=1e-05,learning_rate=0.0003
+clip_range,5,0.23382539682539671,15.446666666666601,1.0,clip_range=0.05,clip_range=0.5
+n_epochs,5,0.14992698412698413,22.286666666666633,1.0,n_epochs=1,n_epochs=10
+gamma,4,0.08152380952380955,23.433333333333394,1.0,gamma=0.9,gamma=0.99
+ent_coef,5,0.07571428571428584,31.893333333333374,0.8,ent_coef=0.1,ent_coef=0
+batch_size,6,0.04787936507936519,12.826666666666597,1.0,batch_size=512,batch_size=64

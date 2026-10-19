@@ -21,8 +21,21 @@ COMMON = dict(
 )
 
 
+# Настройки по средам. CartPole: 50 000 шагов (см. комментарий выше). Acrobot-v1 учится дольше: ориентир 100 000 шагов
+# (проверь на серии baseline: `python -m src.sweep --env Acrobot-v1 --groups baseline`).
+ENV_COMMON = {
+    "CartPole-v1": COMMON,
+    "Acrobot-v1": dict(total_timesteps=100_000, eval_freq=5_000, n_eval_episodes=10),
+}
+
+
 def values(param: str, vals: list) -> list[dict]:
     return [{param: v} for v in vals]
+
+
+def grid(param1: str, vals1: list, param2: str, vals2: list) -> list[dict]:
+    """Сетка из двух параметров: все пары значений. Порядок: строки — param1, столбцы — param2."""
+    return [{param1: a, param2: b} for a in vals1 for b in vals2]
 
 
 # ----------------------------------------------------------------------------------------
@@ -49,6 +62,14 @@ PPO_SWEEPS: dict[str, list[dict]] = {
     "n_envs": [{"n_envs": k, "n_steps": 2048 // k} for k in (1, 2, 4, 8)],
     "net_arch": values("net_arch", [[16, 16], [64, 64], [256, 256]]),
     "activation": values("activation", ["tanh", "relu"]),
+
+    # ---- Сетки сочетаний (имена серий ДОЛЖНЫ начинаться с grid_: так analyze рисует тепловые карты) ----
+    # lr × clip: сдерживает ли малый clip_range большой learning_rate (на 0.01 у нас были срывы)?
+    "grid_lr_clip": grid("learning_rate", [1e-4, 3e-4, 1e-3, 1e-2], "clip_range", [0.05, 0.1, 0.2, 0.5]),
+    # lr × epochs: компенсирует ли большое число эпох малый learning_rate (оба «подкручивают сеть»)?
+    "grid_lr_epochs": grid("learning_rate", [1e-4, 3e-4, 1e-3, 1e-2], "n_epochs", [3, 10, 20, 40]),
+    # gamma × lambda: пара «горизонт» и «шум оценки преимущества» (есть и у A2C, годится для сравнения алгоритмов)
+    "grid_gamma_lambda": grid("gamma", [0.95, 0.99, 0.999], "gae_lambda", [0.9, 0.95, 1.0]),
 }
 
 # ----------------------------------------------------------------------------------------
@@ -66,6 +87,8 @@ A2C_SWEEPS: dict[str, list[dict]] = {
     "gae_lambda": values("gae_lambda", [0.8, 0.9, 0.95, 1.0]),                   # TODO: уточнить
     "ent_coef": values("ent_coef", [0.0, 0.001, 0.01, 0.05]),                    # TODO: уточнить
     "use_rms_prop": values("use_rms_prop", [True, False]),                       # RMSprop vs Adam
+    # Для сравнения с PPO по сетке gamma × lambda (те же значения, чтобы можно было сопоставить):
+    "grid_gamma_lambda": grid("gamma", [0.95, 0.99, 0.999], "gae_lambda", [0.9, 0.95, 1.0]),
 }
 
 SWEEPS = {"ppo": PPO_SWEEPS, "a2c": A2C_SWEEPS}

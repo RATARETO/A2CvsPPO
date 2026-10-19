@@ -14,8 +14,10 @@ videos/*.gif
 models/*.zip
 
 results/
+results_acrobot/
 results_quick/
 analysis/
+analysis_acrobot/
 analysis_quick/
 videos/
 logs/

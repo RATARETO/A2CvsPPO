@@ -18,10 +18,15 @@
   compare_sensitivity.png          чувствительность параметров: PPO против A2C
   compare_best.png                 лучшая найденная конфигурация каждого алгоритма и их дефолты
 
+Сетки сочетаний (серии с префиксом grid_, например grid_lr_clip) получают отдельные графики:
+  <algo>_<серия>_heatmap.png       тепловые карты: AUC, итог, доля решивших, шаги до решения, просадка, разброс сидов
+  <algo>_<серия>_interaction.png   линии AUC: непараллельные линии = параметры влияют друг на друга
+Награды всех сред приводятся к шкале 0..500 (см. ENV_SPECS), поэтому графики разных сред сопоставимы.
+
 Метрики одного запуска (по кривой eval_sampled_mean):
     final              средняя оценка за последние LAST_K точек (итоговое качество)
     auc                средняя оценка по всей кривой / 500  (0..1; скорость + качество обучения)
-    solved             держался ли порог THRESHOLD SUSTAIN оценок подряд (одиночный всплеск не считается)
+    solved             держался ли порог «решено» SUSTAIN оценок подряд (одиночный всплеск не считается)
     steps_to_threshold число шагов до начала первой такой серии (NaN, если не достигнут)
     min_after_solve    минимум оценки ПОСЛЕ этого момента (низкий = «срыв», нестабильность)
 Чувствительность параметра = разброс средних AUC между значениями этого параметра (max - min).
@@ -41,8 +46,19 @@ import numpy as np
 import pandas as pd
 from matplotlib.gridspec import GridSpec
 
-THRESHOLD = 475.0   # 95% от максимума CartPole-v1
-MAX_RETURN = 500.0  # потолок CartPole-v1
+MAX_RETURN = 500.0  # все награды приводятся к шкале 0..500 («нормированная награда»)
+# Для каждой среды: минимальная и максимальная награда за эпизод и порог «решено» (в исходных единицах среды).
+# CartPole: 0..500, порог 475. Acrobot: -500..0, порог -100. Нормировка: score = 500 * (R - min) / (max - min).
+# Чтобы подключить другую среду, добавь строку сюда.
+ENV_SPECS = {
+    "CartPole-v1": {"min": 0.0, "max": 500.0, "threshold": 475.0},
+    "Acrobot-v1": {"min": -500.0, "max": 0.0, "threshold": -100.0},
+}
+
+
+def normalize_return(value, env_id: str):
+    spec = ENV_SPECS[env_id]
+    return MAX_RETURN * (value - spec["min"]) / (spec["max"] - spec["min"])
 LAST_K = 5          # сколько последних оценок усредняем для «итогового» качества
 SUSTAIN = 2         # сколько оценок ПОДРЯД должно быть >= порога, чтобы считать, что агент «решил» задачу
 Y = "eval_sampled_mean"
@@ -72,6 +88,11 @@ def load_runs(results_dir: Path) -> pd.DataFrame:
         df = df[df["timesteps"] <= meta["total_timesteps"]]  # отбрасываем «перебег» из-за размера rollout
         if Y not in df.columns:
             raise SystemExit(f"{eval_path}: старый формат eval.csv. Удали results/ (и results_quick/) и перезапусти эксперименты.")
+        env_id = meta["env_id"]
+        if env_id not in ENV_SPECS:
+            raise SystemExit(f"Среда {env_id} не описана в ENV_SPECS (src/analyze.py): добавь минимум, максимум и порог награды.")
+        df[Y] = normalize_return(df[Y], env_id)
+        df["threshold"] = float(normalize_return(ENV_SPECS[env_id]["threshold"], env_id))
         for key in KEYS:
             df[key] = meta[key]
         frames.append(df)
@@ -83,7 +104,7 @@ def load_runs(results_dir: Path) -> pd.DataFrame:
 def run_metrics(g: pd.DataFrame) -> dict:
     g = g.sort_values("timesteps")
     y, t = g[Y].to_numpy(), g["timesteps"].to_numpy()
-    ok = y >= THRESHOLD
+    ok = y >= float(g["threshold"].iloc[0])
     first = next((i for i in range(len(y) - SUSTAIN + 1) if ok[i:i + SUSTAIN].all()), None)
     return {
         "final": float(y[-LAST_K:].mean()),
@@ -121,7 +142,7 @@ SENS_COLUMNS = ["group", "n_values", "auc_range", "final_range", "share_solved",
 def sensitivity_table(configs: pd.DataFrame, algo: str) -> pd.DataFrame:
     rows = []
     for group, g in configs[configs["algo"] == algo].groupby("group"):
-        if group == "baseline" or len(g) < 2:
+        if group == "baseline" or group.startswith("grid_") or len(g) < 2:
             continue
         rows.append({
             "group": group,
@@ -224,7 +245,7 @@ def plot_group_overview(df, runs, algo: str, group: str, out_dir: Path) -> None:
 
     ax_curve.set_title("Кривые обучения: среднее ± std по сидам")
     ax_curve.set_xlabel("шаги среды")
-    ax_curve.set_ylabel("награда за эпизод (500 = максимум)")
+    ax_curve.set_ylabel("нормированная награда (0..500)")
     ax_curve.legend(title=group, fontsize=8, loc="lower right")
 
     ax_final.set_title(f"Итоговая награда (последние {LAST_K} оценок)")
@@ -308,7 +329,8 @@ def _baseline_row(configs: pd.DataFrame, algo: str):
 
 def plot_overview_all_params(configs, runs, algo: str, out_dir: Path) -> None:
     cfg = configs[configs["algo"] == algo]
-    groups = [g for g in cfg["group"].unique() if g != "baseline" and (cfg["group"] == g).sum() >= 2]
+    groups = [g for g in cfg["group"].unique()
+              if g != "baseline" and not g.startswith("grid_") and (cfg["group"] == g).sum() >= 2]
     if not groups:
         return
     base = _baseline_row(configs, algo)
@@ -352,6 +374,93 @@ def plot_sensitivity(table: pd.DataFrame, configs: pd.DataFrame, algo: str, out_
     ax.set_title(f"{algo.upper()}: насколько сильно параметр влияет на обучение\n(столбик короче красной линии ≈ эффект неотличим от шума)")
     _save(fig, out_dir / f"{algo}_sensitivity.png")
 
+
+
+# ----------------------------------------------------------------------------------------
+# Сетки сочетаний гиперпараметров (серии grid_*)
+# ----------------------------------------------------------------------------------------
+def _num(text: str):
+    try:
+        return float(text)
+    except ValueError:
+        return text
+
+
+def _grid_frame(configs: pd.DataFrame, algo: str, group: str):
+    """-> (cfg с колонками p1, p2; имена параметров; отсортированные значения) или None, если это не сетка 2 параметров."""
+    cfg = configs[(configs["algo"] == algo) & (configs["group"] == group)].copy()
+    parsed = [dict(item.split("=", 1) for item in name.split(",")) for name in cfg["name"]]
+    keys = list(parsed[0].keys())
+    if len(keys) != 2 or any(list(p.keys()) != keys for p in parsed):
+        return None
+    cfg["p1"] = [p[keys[0]] for p in parsed]
+    cfg["p2"] = [p[keys[1]] for p in parsed]
+    v1 = sorted(cfg["p1"].unique(), key=_num)
+    v2 = sorted(cfg["p2"].unique(), key=_num)
+    return cfg, keys, v1, v2
+
+
+def _grid_array(cfg, col: str, v1, v2) -> np.ndarray:
+    grid = np.full((len(v1), len(v2)), np.nan)
+    for _, r in cfg.iterrows():
+        grid[v1.index(r["p1"]), v2.index(r["p2"])] = r[col]
+    return grid
+
+
+def plot_grid(configs: pd.DataFrame, algo: str, group: str, out_dir: Path) -> None:
+    frame = _grid_frame(configs, algo, group)
+    if frame is None:
+        return
+    cfg, keys, v1, v2 = frame
+    metrics = [
+        ("auc_mean", "AUC (выше = лучше)", "viridis", 0, 1, lambda v: f"{v:.2f}"),
+        ("final_mean", "Итоговая награда (0..500)", "viridis", 0, MAX_RETURN, lambda v: f"{v:.0f}"),
+        ("solved_rate", "Доля сидов, решивших задачу", "viridis", 0, 1, lambda v: f"{v * 100:.0f}%"),
+        ("median_steps_to_threshold", "Шагов до решения (меньше = лучше)", "viridis_r", None, None, lambda v: f"{v / 1000:.1f}k"),
+        ("mean_min_after_solve", "Просадка после решения (выше = стабильнее)", "viridis", 0, MAX_RETURN, lambda v: f"{v:.0f}"),
+        ("auc_std", "Разброс AUC между сидами (меньше = стабильнее)", "viridis_r", 0, None, lambda v: f"{v:.3f}"),
+    ]
+    fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+    for ax, (col, title, cmap_name, vmin, vmax, fmt) in zip(axes.flat, metrics):
+        grid = _grid_array(cfg, col, v1, v2)
+        cmap = plt.get_cmap(cmap_name).copy()
+        cmap.set_bad("lightgray")
+        image = ax.imshow(np.ma.masked_invalid(grid), cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto")
+        for i in range(len(v1)):
+            for j in range(len(v2)):
+                text = "—" if np.isnan(grid[i, j]) else fmt(grid[i, j])
+                ax.text(j, i, text, ha="center", va="center", fontsize=9,
+                        bbox=dict(boxstyle="round,pad=0.15", fc="white", alpha=0.75, lw=0))
+        ax.set_xticks(range(len(v2)))
+        ax.set_xticklabels(v2)
+        ax.set_yticks(range(len(v1)))
+        ax.set_yticklabels(v1)
+        ax.set_xlabel(keys[1])
+        ax.set_ylabel(keys[0])
+        ax.set_title(title, fontsize=10)
+        fig.colorbar(image, ax=ax, fraction=0.046)
+    fig.suptitle(f"{algo.upper()} — сетка «{keys[0]} × {keys[1]}» (прочерк = ни один сид не решил)", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    _save(fig, out_dir / f"{algo}_{group}_heatmap.png")
+
+    auc, std = _grid_array(cfg, "auc_mean", v1, v2), _grid_array(cfg, "auc_std", v1, v2)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 4.8), sharey=True)
+    for j, b in enumerate(v2):
+        ax1.errorbar(range(len(v1)), auc[:, j], yerr=std[:, j], marker="o", capsize=3, label=f"{keys[1]}={b}")
+    for i, a in enumerate(v1):
+        ax2.errorbar(range(len(v2)), auc[i, :], yerr=std[i, :], marker="o", capsize=3, label=f"{keys[0]}={a}")
+    for ax, key, values, other in ((ax1, keys[0], v1, keys[1]), (ax2, keys[1], v2, keys[0])):
+        ax.set_xticks(range(len(values)))
+        ax.set_xticklabels(values)
+        ax.set_xlabel(key)
+        ax.set_ylim(0, 1.02)
+        ax.legend(fontsize=8)
+    ax1.set_ylabel("AUC (выше = лучше)")
+    ax1.set_title(f"AUC как функция {keys[0]} (линии: значения {keys[1]})")
+    ax2.set_title(f"AUC как функция {keys[1]} (линии: значения {keys[0]})")
+    fig.suptitle(f"{algo.upper()} — взаимодействие параметров: непараллельные линии = параметры влияют друг на друга", fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    _save(fig, out_dir / f"{algo}_{group}_interaction.png")
 
 # ----------------------------------------------------------------------------------------
 # Сравнение алгоритмов (если в results/ есть больше одного)
@@ -436,7 +545,10 @@ def main() -> None:
     sens_tables: dict[str, pd.DataFrame] = {}
     for algo in algos:
         for group in df[df["algo"] == algo]["group"].unique():
-            plot_group_overview(df, runs, algo, group, out_dir)
+            if group.startswith("grid_"):
+                plot_grid(configs, algo, group, out_dir)
+            else:
+                plot_group_overview(df, runs, algo, group, out_dir)
             plot_group_seeds(df, algo, group, out_dir)
             plot_group_diagnostics(df, algo, group, out_dir)
         plot_overview_all_params(configs, runs, algo, out_dir)
