@@ -1,0 +1,261 @@
+"""Run-level statistics, protocol audit and publication plots."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+from collections import defaultdict
+from pathlib import Path
+
+import matplotlib
+import numpy as np
+
+matplotlib.use("Agg")
+from matplotlib import pyplot as plt
+
+from .config import PROTOCOL, canonical_json
+from .io import write_csv, write_json
+from .metrics import bootstrap_mean, difference_ci, success_interval
+from .results import Run, condition_spec, load_runs
+
+MEASURES = ("auc", "final_eval_sampled_mean", "last_window_mean", "max_drawdown",
+            "post_solve_drawdown", "post_solve_below_threshold_fraction", "temporal_rms_change",
+            "restricted_confirmation_steps")
+
+
+def family_key(run: Run) -> str:
+    params = dict(run.metadata.get("effective_hyperparams", run.config.get("algo_params", {})))
+    # Only the swept parameter may vary within an OFAT family.
+    params.pop(run.config["group"], None)
+    return hashlib.sha256(canonical_json(params).encode()).hexdigest()[:10]
+
+
+def group_runs(runs: list[Run]) -> dict:
+    groups = defaultdict(list)
+    for run in runs:
+        groups[(run.stratum, run.config["algo"], run.config["group"], family_key(run))].append(run)
+    return groups
+
+
+def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list, list]:
+    configurations = defaultdict(list)
+    for run in runs:
+        configurations[(run.stratum, run.config["algo"], run.config["group"],
+                        family_key(run), run.config["name"])].append(run)
+    summary = []
+    for (stratum, algo, group, family, name), items in sorted(configurations.items()):
+        row = dict(stratum=stratum, algo=algo, group=group, family=family, name=name,
+                   phase=items[0].config.get("phase", "legacy"),
+                   n_seeds=len(items), protocol=items[0].protocol)
+        for measure in MEASURES:
+            values = [r.metrics[measure] for r in items if r.metrics[measure] is not None]
+            if values:
+                row.update({f"{measure}_{key}": value for key, value in
+                            bootstrap_mean(values, repetitions, seed).items()})
+        solved = sum(r.metrics["solved"] for r in items)
+        row["solved_rate"] = solved / len(items)
+        row["solved_ci_low"], row["solved_ci_high"] = success_interval(solved, len(items))
+        row["n_censored"] = len(items) - solved
+        summary.append(row)
+    sensitivity = []
+    for (stratum, algo, group, family), items in sorted(group_runs(runs).items()):
+        by_name = defaultdict(dict)
+        for run in items:
+            by_name[run.config["name"]][run.config["seed"]] = run
+        if len(by_name) < 2:
+            continue
+        seed_sets = [set(rows) for rows in by_name.values()]
+        balanced = all(s == seed_sets[0] for s in seed_sets)
+        row = dict(stratum=stratum, algo=algo, group=group, family=family,
+                   n_values=len(by_name), balanced_seeds=balanced,
+                   values=canonical_json(sorted(by_name)))
+        if balanced:
+            matrix = np.array([[rows[s].metrics["auc"] for rows in by_name.values()]
+                               for s in sorted(seed_sets[0])])
+            row["auc_range"] = float(np.ptp(matrix.mean(axis=0)))
+            row["n_seeds_per_value"] = len(matrix)
+            if len(matrix) > 1:
+                rng = np.random.default_rng(seed)
+                ranges = [np.ptp(matrix[rng.integers(0, len(matrix), len(matrix))].mean(axis=0))
+                          for _ in range(repetitions)]
+                row["auc_range_ci_low"], row["auc_range_ci_high"] = map(
+                    float, np.percentile(ranges, [2.5, 97.5]))
+        else:
+            row["reason"] = "Unequal seed sets; complete planned runs before sensitivity inference"
+        sensitivity.append(row)
+    comparisons = []
+    # Compare only one unambiguous configuration per algorithm under identical common conditions.
+    candidates = defaultdict(lambda: defaultdict(list))
+    for key, items in configurations.items():
+        stratum, algo, group, family, name = key
+        if items[0].protocol == PROTOCOL:
+            candidates[(stratum, group, name)][algo].append(items)
+    for (stratum, group, name), algorithms in sorted(candidates.items()):
+        if any(len(algorithms.get(algo, [])) != 1 for algo in ("a2c", "ppo")):
+            continue
+        a, b = algorithms["a2c"][0], algorithms["ppo"][0]
+        for metric in ("auc", "final_eval_sampled_mean", "max_drawdown", "restricted_confirmation_steps"):
+            av, bv = ([r.metrics[metric] for r in items if r.metrics[metric] is not None]
+                      for items in (a, b))
+            if av and bv:
+                comparisons.append({"stratum": stratum, "group": group, "name": name,
+                                    "metric": metric, "n_a2c": len(av), "n_ppo": len(bv),
+                                    **difference_ci(av, bv, repetitions, seed)})
+    return summary, sensitivity, comparisons
+
+
+def plot_curves(runs: list[Run], out: Path, repetitions: int, seed: int) -> None:
+    for (stratum, algo, group, family), items in sorted(group_runs(runs).items()):
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4), constrained_layout=True)
+        try:
+            names = sorted({r.config["name"] for r in items}, key=lambda name: min(
+                r.config.get("sweep_index", 0) for r in items if r.config["name"] == name))
+            for index, name in enumerate(names):
+                selected = sorted((r for r in items if r.config["name"] == name),
+                                  key=lambda r: r.config["seed"])
+                t = np.array([point["timesteps"] for point in selected[0].curve])
+                y = np.array([[point["eval_sampled_mean"] for point in r.curve] for r in selected])
+                color = plt.get_cmap("tab10")(index % 10)
+                label = f"{name} (n={len(y)})"
+                axes[0].plot(t, y.mean(axis=0), label=label, color=color)
+                if len(y) > 1:
+                    rng = np.random.default_rng(seed)
+                    boot = np.array([y[rng.integers(0, len(y), len(y))].mean(axis=0)
+                                     for _ in range(repetitions)])
+                    low, high = np.percentile(boot, [2.5, 97.5], axis=0)
+                    axes[0].fill_between(t, low, high, alpha=0.15, color=color)
+                for curve in y:
+                    axes[1].plot(t, curve, alpha=0.45, color=color, linewidth=0.8)
+            for axis in axes:
+                axis.axhline(items[0].config.get("threshold", 475), color="black", ls="--", lw=0.8)
+                axis.set(xlabel="Training environment transitions", ylabel="Sampled policy return",
+                         ylim=(0, 510))
+            axes[0].set_title("Mean and pointwise 95% bootstrap CI")
+            axes[1].set_title("Individual training runs")
+            axes[0].legend(fontsize=7, loc="best")
+            fig.suptitle(f"{algo.upper()} | {group} | {items[0].config.get('phase', 'legacy')} | {stratum}")
+            stem = f"{stratum}_{algo}_{group}_{family}"
+            fig.savefig(out / f"{stem}.png", dpi=180)
+            fig.savefig(out / f"{stem}.pdf")
+        finally:
+            plt.close(fig)
+
+
+def plot_metrics(runs: list[Run], out: Path, repetitions: int, seed: int) -> None:
+    for (stratum, algo, group, family), items in sorted(group_runs(runs).items()):
+        names = sorted({r.config["name"] for r in items}, key=lambda name: min(
+            r.config.get("sweep_index", 0) for r in items if r.config["name"] == name))
+        fig, axes = plt.subplots(1, 3, figsize=(13, 5), constrained_layout=True)
+        try:
+            for axis, metric, label in zip(axes, ("auc", "final_eval_sampled_mean", "max_drawdown"),
+                                           ("Normalized AUC", "Independent final return", "Max drawdown")):
+                for index, name in enumerate(names):
+                    values = [r.metrics[metric] for r in items
+                              if r.config["name"] == name and r.metrics[metric] is not None]
+                    if not values:
+                        continue
+                    stats = bootstrap_mean(values, repetitions, seed)
+                    axis.scatter(np.full(len(values), index), values, alpha=0.5, s=16)
+                    axis.scatter(index, stats["mean"], color="black", marker="_", zorder=3)
+                    if stats["ci_low"] is not None:
+                        axis.vlines(index, stats["ci_low"], stats["ci_high"], color="black")
+                axis.set_xticks(range(len(names)), names, rotation=55, ha="right", fontsize=7)
+                axis.set_ylabel(label)
+            fig.suptitle(f"{algo.upper()} | {group} | {stratum}: runs, mean and 95% CI")
+            stem = f"{stratum}_{algo}_{group}_{family}_metrics"
+            fig.savefig(out / f"{stem}.png", dpi=180)
+            fig.savefig(out / f"{stem}.pdf")
+        finally:
+            plt.close(fig)
+
+
+def analyze(roots: list[Path], out: Path, repetitions: int = 2000, seed: int = 2026,
+            plots: bool = True) -> dict:
+    if repetitions < 100:
+        raise ValueError("At least 100 bootstrap repetitions are required")
+    out.mkdir(parents=True, exist_ok=True)
+    runs, audit = load_runs(roots)
+    write_csv(out / "audit.csv", audit)
+    if not runs:
+        raise ValueError(f"No valid completed runs. See {out / 'audit.csv'}")
+    summary, sensitivity, comparisons = summarize(runs, repetitions, seed)
+    write_csv(out / "runs.csv", [{"path": str(r.path), "stratum": r.stratum,
+                                  "protocol": r.protocol, "algo": r.config["algo"],
+                                  "group": r.config["group"], "name": r.config["name"],
+                                  "seed": r.config["seed"], "phase": r.config.get("phase", "legacy"),
+                                  **r.metrics} for r in runs])
+    write_csv(out / "summary.csv", summary)
+    # Always replace empty tables too: stale comparisons must never survive a new report.
+    for name, rows in (("sensitivity.csv", sensitivity), ("comparison.csv", comparisons)):
+        if rows:
+            write_csv(out / name, rows)
+        else:
+            (out / name).write_text("", encoding="utf-8")
+    strata = {r.stratum: condition_spec(r.config, r.metadata, r.curve, r.protocol) for r in runs}
+    manifest = {"analysis_seed": seed, "bootstrap_repetitions": repetitions,
+                "input_roots": [str(root.resolve()) for root in roots],
+                "strata": strata, "loaded_runs": len(runs), "comparisons": len(comparisons),
+                "excluded_runs": sum(row["status"] == "excluded" for row in audit),
+                "incomplete_runs": sum(row["status"] == "incomplete" for row in audit),
+                "missing_runs": sum(row["status"] == "missing" for row in audit)}
+    write_json(out / "analysis.json", manifest)
+    if plots:
+        plot_curves(runs, out, repetitions, seed)
+        plot_metrics(runs, out, repetitions, seed)
+    report = f"""# A2C / PPO: stability and hyperparameter sensitivity
+
+Loaded runs: {len(runs)}. Separate condition strata: {len(strata)}.
+Excluded runs: {manifest['excluded_runs']}; incomplete: {manifest['incomplete_runs']}.
+Planned runs not found: {manifest['missing_runs']}.
+Compatible configuration/metric comparisons: {len(comparisons)}.
+
+See audit.csv for exclusions and analysis.json for exact comparison conditions.
+Only completed runs enter statistics. Missing/failed planned runs are not treated as
+successful observations: resolve audit/failures and check the saved sweep plan before publication.
+Legacy results are descriptive only and never directly compared with the versioned protocol.
+Different phase, environment settings, evaluation grid, versions or source form separate strata.
+
+The independent sampling unit is a training run, not an evaluation episode/checkpoint.
+Mean CIs are percentile bootstrap 95% intervals over training runs ({repetitions} resamples,
+seed {seed}). No CI or sample standard deviation is supplied for n=1. Small n remains uncertain.
+Success-rate intervals use Wilson's method. Curve bands are pointwise, not simultaneous.
+Differences are A2C minus PPO using independently resampled runs. Intervals are descriptive,
+without adjustment for multiple comparisons; they do not establish general superiority.
+
+AUC = trapezoidal integral of sampled mean return over actual steps / (500 * budget).
+last_window_mean averages the last five curve points; final_eval_sampled_mean uses a
+separate fixed set of evaluation episodes. They are different endpoints.
+Solved = first sequence of sustain_evals consecutive mean returns >= threshold.
+confirmation_steps is its last checkpoint. Non-solvers are right-censored at the budget.
+restricted_confirmation_steps replaces censored times with the budget (a restricted endpoint,
+not an estimate of eventual convergence time). Post-solve metrics are conditional on success;
+their *_n columns report the smaller denominator. A last-checkpoint confirmation leaves no
+subsequent follow-up; interpret these conditional metrics together with the full curves.
+max_drawdown is the largest peak-to-later-trough drop. temporal_rms_change measures adjacent
+checkpoint changes, including useful learning improvements; it is not a standalone failure score.
+
+Sensitivity is max-minus-min mean AUC within the declared OFAT range, and is reported only
+for balanced seed sets. Its bootstrap resamples training seeds jointly across parameter values.
+It depends on range width and grid density; do not rank algorithms across unequal ranges.
+Select settings on search seeds, freeze config, and assess them on held-out confirmatory seeds.
+Study results apply to CartPole-v1 and the explicitly recorded implementations/settings.
+"""
+    (out / "report.md").write_text(report, encoding="utf-8")
+    return manifest
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--results", nargs="+", type=Path, default=[Path("results_search")])
+    parser.add_argument("--out", type=Path, default=Path("analysis"))
+    parser.add_argument("--bootstrap", type=int, default=2000)
+    parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("--no-plots", action="store_true")
+    args = parser.parse_args()
+    manifest = analyze(args.results, args.out, args.bootstrap, args.seed, not args.no_plots)
+    print(f"Loaded {manifest['loaded_runs']} runs; {manifest['comparisons']} metric comparisons. "
+          f"Report: {args.out / 'report.md'}")
+
+
+if __name__ == "__main__":
+    main()
