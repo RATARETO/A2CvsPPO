@@ -1,0 +1,23 @@
+{
+  "algo": "a2c",
+  "group": "gae_lambda",
+  "name": "gae_lambda=1",
+  "seed": 4,
+  "env_id": "Acrobot-v1",
+  "protocol": "acrobot-stability-v1",
+  "phase": "search",
+  "timesteps_done": 102400,
+  "final_eval_mean": -500.0,
+  "final_eval_std": 0.0,
+  "final_eval_sampled_mean": -300.43333333333334,
+  "final_eval_sampled_std": 148.29670334239472,
+  "train_time_sec": 105.05008589998761,
+  "intermediate_eval_time_sec": 18.923728899972048,
+  "updates": 20480,
+  "artifact_sha256": {
+    "eval.csv": "014f9f205a8a14d1eb216b26044326e3a14cfa0d0b24e47f6bcc996c4ae893c4",
+    "evaluation_episodes.csv": "e84341c828726452ef281cf717051636d2b3fda089e0a8b1298a4578ec951540",
+    "final_episodes.csv": "ceb550726f4490b156d2006da8d92735290b0944c78483e36948a10a9c625cc1",
+    "model.zip": "b410ec921180a4e427d0c9d9f632f1dfa78f83e00a94311a694dfa372fcc8071"
+  }
+}

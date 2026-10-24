@@ -1,0 +1,134 @@
+{
+  "config": {
+    "algo": "ppo",
+    "group": "n_steps",
+    "name": "n_steps=256",
+    "sweep_index": 1,
+    "seed": 0,
+    "phase": "search",
+    "protocol": "acrobot-stability-v1",
+    "env_id": "Acrobot-v1",
+    "total_timesteps": 102400,
+    "n_envs": 1,
+    "net_arch": [
+      64,
+      64
+    ],
+    "activation": "tanh",
+    "eval_freq": 5120,
+    "n_eval_episodes": 10,
+    "final_eval_episodes": 30,
+    "eval_seed": 1000000,
+    "final_eval_seed": 2000000,
+    "threshold": -100.0,
+    "sustain_evals": 2,
+    "algo_params": {
+      "n_steps": 256
+    }
+  },
+  "config_sha256": "8c99aec3977b2e4f3f749ceb1fc909b69e733668bc0a2ecc5a9d6fca5a86f55c",
+  "effective_hyperparams": {
+    "learning_rate": 0.0003,
+    "n_steps": 256,
+    "batch_size": 64,
+    "n_epochs": 10,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "ent_coef": 0.0,
+    "vf_coef": 0.5,
+    "max_grad_norm": 0.5,
+    "normalize_advantage": true,
+    "clip_range": 0.2,
+    "clip_range_vf": null,
+    "target_kl": null
+  },
+  "policy_kwargs": {
+    "net_arch": [
+      64,
+      64
+    ],
+    "activation": "tanh"
+  },
+  "environment": {
+    "env_id": "Acrobot-v1",
+    "protocol": "acrobot-stability-v1",
+    "action_kind": "discrete",
+    "horizon": 500,
+    "return_low": -500.0,
+    "return_high": 0.0,
+    "threshold": -100.0,
+    "total_timesteps": 102400,
+    "eval_freq": 5120
+  },
+  "action_space": {
+    "type": "Discrete",
+    "n": 3
+  },
+  "action_distribution": "CategoricalDistribution",
+  "use_sde": false,
+  "deterministic_policy": "argmax",
+  "optimizer": {
+    "class": "Adam",
+    "defaults": {
+      "lr": 0.0003,
+      "betas": [
+        0.9,
+        0.999
+      ],
+      "eps": 1e-05,
+      "weight_decay": 0,
+      "amsgrad": false,
+      "maximize": false,
+      "foreach": null,
+      "capturable": false,
+      "differentiable": false,
+      "fused": null,
+      "decoupled_weight_decay": false
+    }
+  },
+  "versions": {
+    "python": "3.10.22",
+    "stable-baselines3": "2.9.0",
+    "gymnasium": "1.4.0",
+    "torch": "2.10.0",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3",
+    "matplotlib": "3.10.8"
+  },
+  "design": {
+    "factors": [
+      "n_steps"
+    ],
+    "linked": [],
+    "kind": "ofat",
+    "levels": {
+      "n_steps": [
+        64,
+        256,
+        1024,
+        2048
+      ]
+    }
+  },
+  "runtime": {
+    "versions": {
+      "python": "3.10.22",
+      "stable-baselines3": "2.9.0",
+      "gymnasium": "1.4.0",
+      "torch": "2.10.0",
+      "numpy": "2.2.6",
+      "pandas": "2.3.3",
+      "matplotlib": "3.10.8"
+    },
+    "platform": {
+      "system": "Windows",
+      "machine": "AMD64",
+      "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel"
+    },
+    "source_sha256": "12556c50007037b8373861fa3f0ab1204c87a071efc368553a2b8ba309b0f6e3",
+    "training_sha256": "857b3fb116f1d31b8ce267897956b22ae289ca2ece249c291d42b6e85cbc8963",
+    "device": "cpu",
+    "torch_threads": 1
+  },
+  "created_utc": "2026-10-24T12:06:00.396721+00:00"
+}

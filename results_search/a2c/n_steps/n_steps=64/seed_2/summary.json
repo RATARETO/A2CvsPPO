@@ -1,0 +1,22 @@
+{
+  "algo": "a2c",
+  "group": "n_steps",
+  "name": "n_steps=64",
+  "seed": 2,
+  "protocol": "cartpole-stability-v1",
+  "phase": "search",
+  "timesteps_done": 51200,
+  "final_eval_mean": 264.26666666666665,
+  "final_eval_std": 112.62354204260414,
+  "final_eval_sampled_mean": 181.2,
+  "final_eval_sampled_std": 67.80088494997688,
+  "train_time_sec": 29.39895699999761,
+  "intermediate_eval_time_sec": 15.970602999987022,
+  "updates": 800,
+  "artifact_sha256": {
+    "eval.csv": "754c4a0caf8d67e8e1700ad22728e94b81685916f2bca57463c62d82e27fe8c6",
+    "evaluation_episodes.csv": "154ff53a795100f3ff21ad4720b016cab8842c05256253475f6a01154547e4ad",
+    "final_episodes.csv": "46e697423b5d04ce5254183539f6ac51095bc28f517924672b0f64c9341b0d56",
+    "model.zip": "d378647f9cfc655e90adc7453be3d4fa006e44a203178f03e3e2413a86dbcb3a"
+  }
+}

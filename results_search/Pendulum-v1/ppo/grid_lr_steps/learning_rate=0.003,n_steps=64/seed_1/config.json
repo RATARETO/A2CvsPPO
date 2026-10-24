@@ -1,0 +1,155 @@
+{
+  "config": {
+    "algo": "ppo",
+    "group": "grid_lr_steps",
+    "name": "learning_rate=0.003,n_steps=64",
+    "sweep_index": 12,
+    "seed": 1,
+    "phase": "search",
+    "protocol": "pendulum-pilot-v1",
+    "env_id": "Pendulum-v1",
+    "total_timesteps": 204800,
+    "n_envs": 1,
+    "net_arch": [
+      64,
+      64
+    ],
+    "activation": "tanh",
+    "eval_freq": 5120,
+    "n_eval_episodes": 10,
+    "final_eval_episodes": 30,
+    "eval_seed": 1000000,
+    "final_eval_seed": 2000000,
+    "threshold": null,
+    "sustain_evals": 2,
+    "algo_params": {
+      "learning_rate": 0.003,
+      "n_steps": 64
+    },
+    "policy_params": {
+      "log_std_init": 0.0
+    }
+  },
+  "config_sha256": "cc56b39c5518e0740101460851c092d6d23a70a86d75ed6799a3962382cf5b06",
+  "effective_hyperparams": {
+    "learning_rate": 0.003,
+    "n_steps": 64,
+    "batch_size": 64,
+    "n_epochs": 10,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "ent_coef": 0.0,
+    "vf_coef": 0.5,
+    "max_grad_norm": 0.5,
+    "normalize_advantage": true,
+    "clip_range": 0.2,
+    "clip_range_vf": null,
+    "target_kl": null
+  },
+  "policy_kwargs": {
+    "net_arch": [
+      64,
+      64
+    ],
+    "activation": "tanh",
+    "log_std_init": 0.0
+  },
+  "environment": {
+    "env_id": "Pendulum-v1",
+    "protocol": "pendulum-pilot-v1",
+    "action_kind": "continuous",
+    "horizon": 200,
+    "return_low": -3254.7208802178725,
+    "return_high": 0.0,
+    "threshold": null,
+    "total_timesteps": 102400,
+    "eval_freq": 5120
+  },
+  "action_space": {
+    "type": "Box",
+    "low": [
+      -2.0
+    ],
+    "high": [
+      2.0
+    ],
+    "shape": [
+      1
+    ],
+    "handling": "SB3 clips to Box bounds"
+  },
+  "action_distribution": "DiagGaussianDistribution",
+  "use_sde": false,
+  "deterministic_policy": "mean then clip",
+  "optimizer": {
+    "class": "Adam",
+    "defaults": {
+      "lr": 0.003,
+      "betas": [
+        0.9,
+        0.999
+      ],
+      "eps": 1e-05,
+      "weight_decay": 0,
+      "amsgrad": false,
+      "maximize": false,
+      "foreach": null,
+      "capturable": false,
+      "differentiable": false,
+      "fused": null,
+      "decoupled_weight_decay": false
+    }
+  },
+  "versions": {
+    "python": "3.10.22",
+    "stable-baselines3": "2.9.0",
+    "gymnasium": "1.4.0",
+    "torch": "2.10.0",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3",
+    "matplotlib": "3.10.8"
+  },
+  "design": {
+    "factors": [
+      "learning_rate",
+      "n_steps"
+    ],
+    "linked": [],
+    "kind": "grid",
+    "levels": {
+      "learning_rate": [
+        0.0001,
+        0.0003,
+        0.0007,
+        0.003
+      ],
+      "n_steps": [
+        64,
+        256,
+        1024,
+        2048
+      ]
+    }
+  },
+  "runtime": {
+    "versions": {
+      "python": "3.10.22",
+      "stable-baselines3": "2.9.0",
+      "gymnasium": "1.4.0",
+      "torch": "2.10.0",
+      "numpy": "2.2.6",
+      "pandas": "2.3.3",
+      "matplotlib": "3.10.8"
+    },
+    "platform": {
+      "system": "Windows",
+      "machine": "AMD64",
+      "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel"
+    },
+    "source_sha256": "12556c50007037b8373861fa3f0ab1204c87a071efc368553a2b8ba309b0f6e3",
+    "training_sha256": "857b3fb116f1d31b8ce267897956b22ae289ca2ece249c291d42b6e85cbc8963",
+    "device": "cpu",
+    "torch_threads": 1
+  },
+  "created_utc": "2026-10-24T15:40:47.765165+00:00"
+}

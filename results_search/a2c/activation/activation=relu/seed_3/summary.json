@@ -1,0 +1,22 @@
+{
+  "algo": "a2c",
+  "group": "activation",
+  "name": "activation=relu",
+  "seed": 3,
+  "protocol": "cartpole-stability-v1",
+  "phase": "search",
+  "timesteps_done": 51200,
+  "final_eval_mean": 145.73333333333332,
+  "final_eval_std": 11.337058211409557,
+  "final_eval_sampled_mean": 142.26666666666668,
+  "final_eval_sampled_std": 11.68455771045224,
+  "train_time_sec": 30.173134899996512,
+  "intermediate_eval_time_sec": 4.706953200009593,
+  "updates": 10240,
+  "artifact_sha256": {
+    "eval.csv": "527341e6b207569cbf1d08892f603315e657fcc541a95983d5cfebc4c9ba43ac",
+    "evaluation_episodes.csv": "1d348a9cd7000ba0aaf4da25009032eb5439e8508ce1e0c1bb6be8b6ae1145a1",
+    "final_episodes.csv": "b4463df623b046ad89eade3a620f9bdee8894ebd7418f820293d9322a0d877eb",
+    "model.zip": "baa853f4b2f8895969c77b47135b23d050ff705d3b99a50656b6aa614ebb925e"
+  }
+}

@@ -3,3 +3,7 @@ docs/data/main_search_v1/*.csv text eol=lf
 docs/data/main_search_v1/*.json text eol=lf
 docs/figures/main_search_v1/*.png binary
 docs/figures/main_search_v1/*.pdf binary
+
+# Preserve original artifact hashes, including CSV line endings.
+results_search/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+analysis_main_search/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

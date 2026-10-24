@@ -1,0 +1,23 @@
+{
+  "algo": "ppo",
+  "group": "gae_lambda",
+  "name": "gae_lambda=0.8",
+  "seed": 3,
+  "env_id": "CartPole-v1",
+  "protocol": "cartpole-stability-v1",
+  "phase": "search",
+  "timesteps_done": 51200,
+  "final_eval_mean": 500.0,
+  "final_eval_std": 0.0,
+  "final_eval_sampled_mean": 500.0,
+  "final_eval_sampled_std": 0.0,
+  "train_time_sec": 69.45705589999852,
+  "intermediate_eval_time_sec": 35.63305819996458,
+  "updates": 250,
+  "artifact_sha256": {
+    "eval.csv": "529c8d090d8eb77e2c860a249f5c716efc53f5411e3b567df9627fd56ed7426c",
+    "evaluation_episodes.csv": "bf9ada09627a56d21902d05abec378bd44b09f7e326c630f74709f0b8426463f",
+    "final_episodes.csv": "b02ea4bc11ccc371c394957f746d8fb6730bc24268bc5ecde75ce46c5516fe5f",
+    "model.zip": "1cfbccbb2f37d1675edd32a0d46f3b095d9f4d41b51191a8e05b218a35e270ed"
+  }
+}

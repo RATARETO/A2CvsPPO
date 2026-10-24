@@ -1,0 +1,23 @@
+{
+  "algo": "a2c",
+  "group": "grid_lr_entropy",
+  "name": "learning_rate=0.0007,ent_coef=0.05",
+  "seed": 4,
+  "env_id": "Pendulum-v1",
+  "protocol": "pendulum-pilot-v1",
+  "phase": "search",
+  "timesteps_done": 204800,
+  "final_eval_mean": -952.8819361647674,
+  "final_eval_std": 576.7416975187223,
+  "final_eval_sampled_mean": -901.8814436341092,
+  "final_eval_sampled_std": 613.6595371431213,
+  "train_time_sec": 179.1138312000112,
+  "intermediate_eval_time_sec": 33.88230059997295,
+  "updates": 40960,
+  "artifact_sha256": {
+    "eval.csv": "801122246955afb8b4ccc91acb32912231a2a2be1ad63ae6bb55dee51f78734e",
+    "evaluation_episodes.csv": "e216b9503d117bd4518931ccdff42b3010a3c5dc4e81c982c722f6498640c485",
+    "final_episodes.csv": "64df4451540d63e6cbe7f06dd358d77ffc63656abe05e0ec6885f8a20086492b",
+    "model.zip": "0be35dc3435beba19fd5c0df4afbae4cde0a4064827027908afaa0a547317b7b"
+  }
+}

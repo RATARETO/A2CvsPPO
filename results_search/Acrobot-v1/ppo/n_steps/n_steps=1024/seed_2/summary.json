@@ -1,0 +1,23 @@
+{
+  "algo": "ppo",
+  "group": "n_steps",
+  "name": "n_steps=1024",
+  "seed": 2,
+  "env_id": "Acrobot-v1",
+  "protocol": "acrobot-stability-v1",
+  "phase": "search",
+  "timesteps_done": 102400,
+  "final_eval_mean": -85.1,
+  "final_eval_std": 16.25289717763164,
+  "final_eval_sampled_mean": -78.4,
+  "final_eval_sampled_std": 6.421837743200929,
+  "train_time_sec": 89.21925960000954,
+  "intermediate_eval_time_sec": 15.157745899967267,
+  "updates": 1000,
+  "artifact_sha256": {
+    "eval.csv": "067ba3c257ee186a8a1a165ca26ff3c0ea0b9a42fc22207e90bb9916ca1e7378",
+    "evaluation_episodes.csv": "388d821aed9826cdbb6ad39c1e40cb9ce4e387b9a6661fbeca4c5ef9e6a3b21e",
+    "final_episodes.csv": "ac7ebe0103d8004f975e87e15639e3d786bc528c380820a06422823388bbb633",
+    "model.zip": "acfc8a782628d8324277799c6fdc048653a50b6f0bc356f1cfb0f49744ad275c"
+  }
+}

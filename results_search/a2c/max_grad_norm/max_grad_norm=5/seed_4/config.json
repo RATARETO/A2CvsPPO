@@ -1,0 +1,109 @@
+{
+  "config": {
+    "algo": "a2c",
+    "group": "max_grad_norm",
+    "name": "max_grad_norm=5",
+    "sweep_index": 3,
+    "seed": 4,
+    "phase": "search",
+    "protocol": "cartpole-stability-v1",
+    "env_id": "CartPole-v1",
+    "total_timesteps": 51200,
+    "n_envs": 1,
+    "net_arch": [
+      64,
+      64
+    ],
+    "activation": "tanh",
+    "eval_freq": 2560,
+    "n_eval_episodes": 10,
+    "final_eval_episodes": 30,
+    "eval_seed": 1000000,
+    "final_eval_seed": 2000000,
+    "threshold": 475.0,
+    "sustain_evals": 2,
+    "algo_params": {
+      "max_grad_norm": 5.0
+    }
+  },
+  "config_sha256": "10a030f026f2031a3020870991b3331d786850726b8f27356ecc75c847606500",
+  "effective_hyperparams": {
+    "learning_rate": 0.0007,
+    "n_steps": 5,
+    "gamma": 0.99,
+    "gae_lambda": 1.0,
+    "ent_coef": 0.0,
+    "vf_coef": 0.5,
+    "max_grad_norm": 5.0,
+    "normalize_advantage": false,
+    "use_rms_prop": true,
+    "rms_prop_eps": 1e-05
+  },
+  "policy_kwargs": {
+    "net_arch": [
+      64,
+      64
+    ],
+    "activation": "tanh"
+  },
+  "optimizer": {
+    "class": "RMSprop",
+    "defaults": {
+      "lr": 0.0007,
+      "momentum": 0,
+      "alpha": 0.99,
+      "eps": 1e-05,
+      "centered": false,
+      "weight_decay": 0,
+      "capturable": false,
+      "foreach": null,
+      "maximize": false,
+      "differentiable": false
+    }
+  },
+  "versions": {
+    "python": "3.10.22",
+    "stable-baselines3": "2.9.0",
+    "gymnasium": "1.4.0",
+    "torch": "2.10.0",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3",
+    "matplotlib": "3.10.8"
+  },
+  "design": {
+    "factors": [
+      "max_grad_norm"
+    ],
+    "linked": [],
+    "kind": "ofat",
+    "levels": {
+      "max_grad_norm": [
+        0.1,
+        0.5,
+        1.0,
+        5.0
+      ]
+    }
+  },
+  "runtime": {
+    "versions": {
+      "python": "3.10.22",
+      "stable-baselines3": "2.9.0",
+      "gymnasium": "1.4.0",
+      "torch": "2.10.0",
+      "numpy": "2.2.6",
+      "pandas": "2.3.3",
+      "matplotlib": "3.10.8"
+    },
+    "platform": {
+      "system": "Windows",
+      "machine": "AMD64",
+      "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel"
+    },
+    "source_sha256": "cac59c331bd5b0268be5921ed24dc31ad32f4bf37897bb6a6860fadf133a1ab6",
+    "training_sha256": "648563fd203bb356075d3bf9cd74699a5223d5390d96a05863c19ad7066917cd",
+    "device": "cpu",
+    "torch_threads": 1
+  },
+  "created_utc": "2026-10-24T01:24:53.005371+00:00"
+}

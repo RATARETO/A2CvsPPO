@@ -14,3 +14,9 @@ results*/
 analysis*/
 .coverage
 htmlcov/
+
+# Include complete study results in branch a2c.
+!results_search/
+!results_search/**
+!analysis_main_search/
+!analysis_main_search/**

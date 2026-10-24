@@ -1,0 +1,22 @@
+{
+  "algo": "a2c",
+  "group": "activation",
+  "name": "activation=tanh",
+  "seed": 4,
+  "protocol": "cartpole-stability-v1",
+  "phase": "search",
+  "timesteps_done": 51200,
+  "final_eval_mean": 129.66666666666666,
+  "final_eval_std": 5.159672685570492,
+  "final_eval_sampled_mean": 120.03333333333333,
+  "final_eval_sampled_std": 28.071911623938654,
+  "train_time_sec": 35.26880010000605,
+  "intermediate_eval_time_sec": 9.496910500020022,
+  "updates": 10240,
+  "artifact_sha256": {
+    "eval.csv": "f9124ff4785a2879ab783e21b13fd70672ae314b0d035f19ff982cf3887e77fa",
+    "evaluation_episodes.csv": "7ced7b5c74633f2ba3fe147320e829238fecb011871ab22094acd49ebaef06c9",
+    "final_episodes.csv": "c4a9d265f7f2a7187d24f29f4f39c31f6bb6ac074f32b6b83055a49a0009ddcb",
+    "model.zip": "089bd8cdf9e0b0a73f3eb75b96f9a182426709df59fc1c0a857a967b283410dc"
+  }
+}

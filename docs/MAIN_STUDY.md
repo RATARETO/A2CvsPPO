@@ -4,7 +4,8 @@
 поисковый этап завершён, все 1 620 позиций выполнены и проверены. Подтверждающая
 фаза ещё не выполнена. Разбор — [RESULTS.md](RESULTS.md), определения метрик и файлов —
 [METHODOLOGY.md](METHODOLOGY.md). Числа состояния ниже относятся к авторскому набору
-данных; результаты обучения не входят в клон репозитория.
+данных. В ветке a2c репозитория RATARETO/A2CvsPPO исходный results_search
+и полный analysis_main_search включены в клон; повторное обучение для анализа не требуется.
 
 Состав исследования утверждён по пилотам: CartPole-v1, Acrobot-v1 и Pendulum-v1.
 Сравнение проводится внутри среды при фиксированном бюджете; достижение полной
@@ -88,7 +89,7 @@ Set-Location C:\XD\Projects\A2C_RL
 Предпросмотр не создаёт результаты и не запускает обучение. Он проверяет существующие
 файлы и показывает completed/pending/blocked. На дату завершения поиска:
 **completed=1620, pending=0, blocked=0**, отсутствующих ячеек сеток нет.
-В чистом клоне без исходных результатов будет pending=1620. Фактическое состояние
+Если использовать отдельный пустой каталог результатов, будет pending=1620. Фактическое состояние
 своего каталога всегда проверяйте через --list; опубликованные сводки не заменяют
 проверку исходных файлов обучения.
 
@@ -128,10 +129,11 @@ blocked до запуска серии. Оставшийся после авар
 ## Анализ
 
 ```powershell
-.venv/Scripts/python.exe -m a2c_research.analyze --results results_search --study-plan configs/main_search_v1.json --out analysis_main_search
+.venv/Scripts/python.exe -m a2c_research.analyze --results results_search --study-plan configs/main_search_v1.json --out analysis_reproduced
 ```
 
-В основном отчёте учитывается только матрица файла плана. Дополнительные серии CartPole
+В этой поставке исходный analysis_main_search уже сохранён в Git; повторный анализ
+выше записывается в отдельный analysis_reproduced. В основном отчёте учитывается только матрица файла плана. Дополнительные серии CartPole
 остаются в данных и получают outside_study в аудите. manifest study в analysis.json
 показывает expected_runs, loaded_runs и missing_or_invalid_runs: выводы по полному
 плану нельзя делать, пока есть необъяснённые пропуски.
