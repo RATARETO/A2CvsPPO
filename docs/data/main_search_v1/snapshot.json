@@ -1,0 +1,69 @@
+{
+  "snapshot_date": "2026-10-25",
+  "phase": "search",
+  "scope": "Published numerical tables and selected figures; not a raw model/episode archive.",
+  "base_commit": "dd45708eebeb83dbdb20d6a0e406f6f2ba2d7146",
+  "analysis_code_note": "Base commit plus documentation-stage report/figure wording changes; exact Python source identified below.",
+  "analysis_source_sha256": "45db6433eebf77caf376e95850eb3214ab21e7616aac7b41ff85802ec84a5236",
+  "training_sha256": "857b3fb116f1d31b8ce267897956b22ae289ca2ece249c291d42b6e85cbc8963",
+  "plan": "configs/main_search_v1.json",
+  "plan_sha256": "ce985c2020e503411d9ebb8a2108766f79c46c47e2bc026cd0c45f64d529d19e",
+  "versions": {
+    "python": "3.10.22",
+    "stable-baselines3": "2.9.0",
+    "gymnasium": "1.4.0",
+    "torch": "2.10.0",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3",
+    "matplotlib": "3.10.8"
+  },
+  "bootstrap_repetitions": 2000,
+  "analysis_seed": 2026,
+  "coverage": {
+    "plan_sha256": "ce985c2020e503411d9ebb8a2108766f79c46c47e2bc026cd0c45f64d529d19e",
+    "expected_runs": 1620,
+    "loaded_runs": 1620,
+    "missing_or_invalid_runs": 0,
+    "outside_study_runs": 175,
+    "incompatible_study_runs": 0
+  },
+  "excluded_runs": 0,
+  "incomplete_runs": 0,
+  "grid_cells": 192,
+  "missing_grid_cells": 0,
+  "distinct_seeded_conditions": 1080,
+  "table_rows": {
+    "summary.csv": 324,
+    "comparison.csv": 484,
+    "sensitivity.csv": 24,
+    "sensitivity_comparison.csv": 12,
+    "grid_cells.csv": 192,
+    "interactions.csv": 108,
+    "baseline_runs.csv": 30
+  },
+  "figure_sources": {
+    "cartpole_baseline": "d7ef53bf9d4c_compare_baseline",
+    "acrobot_baseline": "991d06f9edd7_compare_baseline",
+    "pendulum_baseline": "aa52770b9cfd_compare_baseline",
+    "pendulum_ppo_lr_entropy": "4c57320c7aa6_ppo_grid_lr_entropy_495acd4c36_heatmap"
+  },
+  "verification": "All nine regenerated analysis tables are byte-identical to the pre-documentation analysis; training identity is unchanged.",
+  "sha256": {
+    "docs/data/main_search_v1/summary.csv": "ebb452db6307d2f942da1dae6b85b8c83d51d097789dd51501a518061899891d",
+    "docs/data/main_search_v1/comparison.csv": "5885d42a0ef1ad50f5977d027234ad180861f6e15259eab4da63f83d49ebc943",
+    "docs/data/main_search_v1/sensitivity.csv": "3261814ecf31bc32a1fd7ddd851845fc25c7439c34b8261db95f761774fee23f",
+    "docs/data/main_search_v1/sensitivity_comparison.csv": "f4db0981be938d697136f14166b3938d7427516e68f920a0e612083c51cead68",
+    "docs/data/main_search_v1/grid_cells.csv": "89d9546eb25c764705a63f02757592e8f14b3cc3e30510a627cafedcc0cc6503",
+    "docs/data/main_search_v1/interactions.csv": "7f34b09ee92b90c9ea4b93a7c6700e90bfb21f7985db6acdc3eb8dc09bf8cf47",
+    "docs/data/main_search_v1/baseline_runs.csv": "79b3b83e5b8cd2b5302761eb6e438164d11f8b59c1e600757085f958ec2594df",
+    "docs/figures/main_search_v1/cartpole_baseline.png": "e10dc81eea767097644df86c6bf06ffa667838c02d9d0fd575e9ca3b3ab73d79",
+    "docs/figures/main_search_v1/cartpole_baseline.pdf": "eb1769558099afbedc91a174a1d57085e0581fcfc51c4bca2740e9e9fa6085c6",
+    "docs/figures/main_search_v1/acrobot_baseline.png": "79f30e07735864419b8ad1c1a8e0412f9ecdafc2892bcfd977d2ce8e6f4e3148",
+    "docs/figures/main_search_v1/acrobot_baseline.pdf": "ba0077644060ffc2214ca3cae2f4bb580af798cbade11720e79ec981530276d5",
+    "docs/figures/main_search_v1/pendulum_baseline.png": "e12a131fc9ebdd850cc7ef68c6d7799072aa263d38d40a8fda6dd37c16d5e5d2",
+    "docs/figures/main_search_v1/pendulum_baseline.pdf": "ecdf6408aed497a98f7c5e71b7beaa002fe6b12957d4ca221e979838687de519",
+    "docs/figures/main_search_v1/pendulum_ppo_lr_entropy.png": "ec401a69661846fefe9ae244f9ec60d5fac66f0c39c7febce99f8e5597559cb4",
+    "docs/figures/main_search_v1/pendulum_ppo_lr_entropy.pdf": "bf4b38b7dcb7df8e465700899114785929fa0464205407133bef5dc4c54a384a"
+  },
+  "published_text_format": "UTF-8 with LF endings for CSV/JSON, enforced by .gitattributes; sha256 hashes exact published bytes."
+}

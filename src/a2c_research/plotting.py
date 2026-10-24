@@ -133,7 +133,7 @@ def plot_grid(items, out, stem, repetitions, seed):
     for axis, (metric, title, cmap, low, high) in zip(axes.flat, specifications):
         if metric == "retained_at_end" and items[0].config.get("threshold", spec.threshold) is None:
             axis.set_title("Retention criterion not defined")
-            axis.text(0.5, 0.5, "Not applicable in this pilot", ha="center", va="center")
+            axis.text(0.5, 0.5, "Not applicable:\nno success threshold defined", ha="center", va="center")
             axis.set_axis_off()
             continue
         matrix = np.full((len(levels[1]), len(levels[0])), np.nan)

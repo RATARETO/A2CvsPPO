@@ -288,7 +288,7 @@ def analyze(roots: list[Path], out: Path, repetitions: int = 2000, seed: int = 2
 
 Loaded runs: {len(runs)}. Separate condition strata: {len(strata)}.
 Excluded runs: {manifest['excluded_runs']}; incomplete: {manifest['incomplete_runs']}.
-Planned runs not found: {manifest['missing_runs']}.
+Missing entries in saved execution plans: {manifest['missing_runs']}.
 Compatible configuration/metric comparisons: {len(comparisons)}.
 {coverage}
 
@@ -342,7 +342,7 @@ Four corner cells must have identical seed sets. Intervals are exploratory and u
 for multiplicity. Nonparallel interaction lines alone are not statistical proof of an interaction.
 Select settings on search seeds, freeze config, and assess them on held-out confirmatory seeds.
 Without a declared threshold, success/retention/censoring endpoints are not applicable,
-not failures. The default Pendulum pilot has no success threshold. Its deterministic
+not failures. Pendulum has no declared success threshold in this study protocol. Its deterministic
 policy uses the Gaussian mean with Box clipping; historical greedy columns keep their names.
 Study results apply only to each recorded environment, protocol and implementation.
 """

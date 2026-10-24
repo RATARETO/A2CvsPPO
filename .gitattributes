@@ -1,0 +1,5 @@
+# Keep published snapshot checksums identical across Windows/Linux checkouts.
+docs/data/main_search_v1/*.csv text eol=lf
+docs/data/main_search_v1/*.json text eol=lf
+docs/figures/main_search_v1/*.png binary
+docs/figures/main_search_v1/*.pdf binary
