@@ -17,7 +17,8 @@ from stable_baselines3.common.env_util import make_vec_env
 
 from .config import ExperimentConfig
 from .evaluation import evaluate
-from .io import file_hash, runtime_metadata, write_csv, write_json
+from .experiments import declared_design
+from .io import file_hash, runtime_metadata, training_identity, write_csv, write_json
 
 ARTIFACTS = ("eval.csv", "evaluation_episodes.csv", "final_episodes.csv", "model.zip")
 
@@ -86,7 +87,7 @@ def run_experiment(cfg: ExperimentConfig, results_root: Path | str = "results",
         if config_path.exists() and not force:
             stored = json.loads(config_path.read_text(encoding="utf-8"))
             same = (stored["config"] == cfg.to_dict()
-                    and stored.get("runtime", {}).get("source_sha256") == runtime["source_sha256"]
+                    and training_identity(stored) == runtime["training_sha256"]
                     and stored.get("versions") == runtime["versions"])
             if not same:
                 raise ValueError(f"Existing run has a different config/source/runtime: {run_dir}. "
@@ -119,6 +120,7 @@ def run_experiment(cfg: ExperimentConfig, results_root: Path | str = "results",
                     "effective_hyperparams": cfg.resolved_params(),
                     "policy_kwargs": {"net_arch": cfg.net_arch, "activation": cfg.activation},
                     "optimizer": optimizer_spec, "versions": runtime["versions"],
+                    "design": declared_design(cfg),
                     "runtime": runtime, "created_utc": datetime.now(timezone.utc).isoformat()}
         write_json(config_path, metadata)
         callback = EvaluationCallback(cfg, run_dir)

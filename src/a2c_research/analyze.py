@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 from collections import defaultdict
 from pathlib import Path
 
@@ -14,27 +13,15 @@ matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 
 from .config import PROTOCOL, canonical_json
-from .io import write_csv, write_json
+from .design import family_key, group_runs, run_design
+from .grids import grid_tables, sensitivity_audit
+from .io import source_hash, write_csv, write_json
 from .metrics import bootstrap_mean, difference_ci, success_interval
 from .results import Run, condition_spec, load_runs
 
 MEASURES = ("auc", "final_eval_sampled_mean", "last_window_mean", "max_drawdown",
             "post_solve_drawdown", "post_solve_below_threshold_fraction", "temporal_rms_change",
             "restricted_confirmation_steps")
-
-
-def family_key(run: Run) -> str:
-    params = dict(run.metadata.get("effective_hyperparams", run.config.get("algo_params", {})))
-    # Only the swept parameter may vary within an OFAT family.
-    params.pop(run.config["group"], None)
-    return hashlib.sha256(canonical_json(params).encode()).hexdigest()[:10]
-
-
-def group_runs(runs: list[Run]) -> dict:
-    groups = defaultdict(list)
-    for run in runs:
-        groups[(run.stratum, run.config["algo"], run.config["group"], family_key(run))].append(run)
-    return groups
 
 
 def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list, list]:
@@ -46,7 +33,8 @@ def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list,
     for (stratum, algo, group, family, name), items in sorted(configurations.items()):
         row = dict(stratum=stratum, algo=algo, group=group, family=family, name=name,
                    phase=items[0].config.get("phase", "legacy"),
-                   n_seeds=len(items), protocol=items[0].protocol)
+                   n_seeds=len(items), protocol=items[0].protocol,
+                   design_kind=run_design(items[0].config, items[0].metadata)["kind"])
         for measure in MEASURES:
             values = [r.metrics[measure] for r in items if r.metrics[measure] is not None]
             if values:
@@ -56,9 +44,18 @@ def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list,
         row["solved_rate"] = solved / len(items)
         row["solved_ci_low"], row["solved_ci_high"] = success_interval(solved, len(items))
         row["n_censored"] = len(items) - solved
+        for flag in ("ever_reached", "retained_at_end", "collapsed_after_success", "final_above_threshold"):
+            values = [r.metrics[flag] for r in items if r.metrics.get(flag) is not None]
+            if values:
+                row[f"{flag}_n"] = len(values)
+                row[f"{flag}_rate"] = sum(values) / len(values)
+                row[f"{flag}_ci_low"], row[f"{flag}_ci_high"] = success_interval(sum(values), len(values))
         summary.append(row)
     sensitivity = []
     for (stratum, algo, group, family), items in sorted(group_runs(runs).items()):
+        design = run_design(items[0].config, items[0].metadata)
+        if design["kind"] == "grid":
+            continue
         by_name = defaultdict(dict)
         for run in items:
             by_name[run.config["name"]][run.config["seed"]] = run
@@ -66,10 +63,13 @@ def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list,
             continue
         seed_sets = [set(rows) for rows in by_name.values()]
         balanced = all(s == seed_sets[0] for s in seed_sets)
+        expected = design.get("levels", {}).get(group, [])
+        complete = not expected or len(by_name) == len(expected)
         row = dict(stratum=stratum, algo=algo, group=group, family=family,
                    n_values=len(by_name), balanced_seeds=balanced,
+                   complete_levels=complete,
                    values=canonical_json(sorted(by_name)))
-        if balanced:
+        if balanced and complete:
             matrix = np.array([[rows[s].metrics["auc"] for rows in by_name.values()]
                                for s in sorted(seed_sets[0])])
             row["auc_range"] = float(np.ptp(matrix.mean(axis=0)))
@@ -81,7 +81,7 @@ def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list,
                 row["auc_range_ci_low"], row["auc_range_ci_high"] = map(
                     float, np.percentile(ranges, [2.5, 97.5]))
         else:
-            row["reason"] = "Unequal seed sets; complete planned runs before sensitivity inference"
+            row["reason"] = "Unequal seed sets or missing levels; complete planned runs before inference"
         sensitivity.append(row)
     comparisons = []
     # Compare only one unambiguous configuration per algorithm under identical common conditions.
@@ -106,6 +106,8 @@ def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list,
 
 def plot_curves(runs: list[Run], out: Path, repetitions: int, seed: int) -> None:
     for (stratum, algo, group, family), items in sorted(group_runs(runs).items()):
+        if run_design(items[0].config, items[0].metadata)["kind"] == "grid":
+            continue
         fig, axes = plt.subplots(1, 2, figsize=(12, 4), constrained_layout=True)
         try:
             names = sorted({r.config["name"] for r in items}, key=lambda name: min(
@@ -130,7 +132,7 @@ def plot_curves(runs: list[Run], out: Path, repetitions: int, seed: int) -> None
                 axis.axhline(items[0].config.get("threshold", 475), color="black", ls="--", lw=0.8)
                 axis.set(xlabel="Training environment transitions", ylabel="Sampled policy return",
                          ylim=(0, 510))
-            axes[0].set_title("Mean and pointwise 95% bootstrap CI")
+            axes[0].set_title("Mean; pointwise 95% CI where n >= 2")
             axes[1].set_title("Individual training runs")
             axes[0].legend(fontsize=7, loc="best")
             fig.suptitle(f"{algo.upper()} | {group} | {items[0].config.get('phase', 'legacy')} | {stratum}")
@@ -143,6 +145,8 @@ def plot_curves(runs: list[Run], out: Path, repetitions: int, seed: int) -> None
 
 def plot_metrics(runs: list[Run], out: Path, repetitions: int, seed: int) -> None:
     for (stratum, algo, group, family), items in sorted(group_runs(runs).items()):
+        if run_design(items[0].config, items[0].metadata)["kind"] == "grid":
+            continue
         names = sorted({r.config["name"] for r in items}, key=lambda name: min(
             r.config.get("sweep_index", 0) for r in items if r.config["name"] == name))
         fig, axes = plt.subplots(1, 3, figsize=(13, 5), constrained_layout=True)
@@ -179,6 +183,8 @@ def analyze(roots: list[Path], out: Path, repetitions: int = 2000, seed: int = 2
     if not runs:
         raise ValueError(f"No valid completed runs. See {out / 'audit.csv'}")
     summary, sensitivity, comparisons = summarize(runs, repetitions, seed)
+    grid_cells, interactions = grid_tables(runs, repetitions, seed)
+    sensitivity_checks = sensitivity_audit(runs, sensitivity)
     write_csv(out / "runs.csv", [{"path": str(r.path), "stratum": r.stratum,
                                   "protocol": r.protocol, "algo": r.config["algo"],
                                   "group": r.config["group"], "name": r.config["name"],
@@ -186,7 +192,9 @@ def analyze(roots: list[Path], out: Path, repetitions: int = 2000, seed: int = 2
                                   **r.metrics} for r in runs])
     write_csv(out / "summary.csv", summary)
     # Always replace empty tables too: stale comparisons must never survive a new report.
-    for name, rows in (("sensitivity.csv", sensitivity), ("comparison.csv", comparisons)):
+    for name, rows in (("sensitivity.csv", sensitivity), ("comparison.csv", comparisons),
+                       ("grid_cells.csv", grid_cells), ("interactions.csv", interactions),
+                       ("sensitivity_comparison.csv", sensitivity_checks)):
         if rows:
             write_csv(out / name, rows)
         else:
@@ -198,10 +206,20 @@ def analyze(roots: list[Path], out: Path, repetitions: int = 2000, seed: int = 2
                 "excluded_runs": sum(row["status"] == "excluded" for row in audit),
                 "incomplete_runs": sum(row["status"] == "incomplete" for row in audit),
                 "missing_runs": sum(row["status"] == "missing" for row in audit)}
+    manifest["analysis_source_sha256"] = source_hash()
+    manifest["grid_cells"] = len(grid_cells)
+    manifest["missing_grid_cells"] = sum(row["status"] == "missing" for row in grid_cells)
+    manifest["interaction_contrasts"] = len(interactions)
+    manifest["sensitivity_range_audit"] = sensitivity_checks
     write_json(out / "analysis.json", manifest)
     if plots:
+        from .plotting import plot_extended
+
         plot_curves(runs, out, repetitions, seed)
         plot_metrics(runs, out, repetitions, seed)
+        manifest["extended_figures"] = plot_extended(runs, summary, sensitivity, out, repetitions, seed,
+                                                     sensitivity_checks)
+    write_json(out / "analysis.json", manifest)
     report = f"""# A2C / PPO: stability and hyperparameter sensitivity
 
 Loaded runs: {len(runs)}. Separate condition strata: {len(strata)}.
@@ -213,7 +231,9 @@ See audit.csv for exclusions and analysis.json for exact comparison conditions.
 Only completed runs enter statistics. Missing/failed planned runs are not treated as
 successful observations: resolve audit/failures and check the saved sweep plan before publication.
 Legacy results are descriptive only and never directly compared with the versioned protocol.
-Different phase, environment settings, evaluation grid, versions or source form separate strata.
+Different phase, evaluation settings, versions or training identity form separate strata.
+Declared experimental factors vary within a series; other common settings stay controlled.
+Full source hashes remain provenance. Analysis-only edits do not invalidate trained models.
 
 The independent sampling unit is a training run, not an evaluation episode/checkpoint.
 Mean CIs are percentile bootstrap 95% intervals over training runs ({repetitions} resamples,
@@ -226,6 +246,11 @@ AUC = trapezoidal integral of sampled mean return over actual steps / (500 * bud
 last_window_mean averages the last five curve points; final_eval_sampled_mean uses a
 separate fixed set of evaluation episodes. They are different endpoints.
 Solved = first sequence of sustain_evals consecutive mean returns >= threshold.
+solved is retained for backward compatibility and equals ever_reached, not permanent success.
+retained_at_end requires the last sustain_evals curve points to meet the threshold.
+collapsed_after_success indicates an observed below-threshold evaluation after confirmation;
+post_confirmation_checkpoints records the available follow-up. final_above_threshold uses
+the independent final evaluation and is a different endpoint. Fractions receive Wilson CIs.
 confirmation_steps is its last checkpoint. Non-solvers are right-censored at the budget.
 restricted_confirmation_steps replaces censored times with the budget (a restricted endpoint,
 not an estimate of eventual convergence time). Post-solve metrics are conditional on success;
@@ -237,6 +262,14 @@ checkpoint changes, including useful learning improvements; it is not a standalo
 Sensitivity is max-minus-min mean AUC within the declared OFAT range, and is reported only
 for balanced seed sets. Its bootstrap resamples training seeds jointly across parameter values.
 It depends on range width and grid density; do not rank algorithms across unequal ranges.
+sensitivity_comparison.csv explicitly checks matching ranges and linked controls before
+comparing the sizes of A2C/PPO sensitivity ranges. Native algorithm settings remain different.
+For n_envs, rollout size stays constant within each algorithm's series (A2C 64, PPO 2048).
+These rollout sizes differ across algorithms, so this series is an algorithm-specific ablation.
+Grid cells are recorded in grid_cells.csv, including missing cells. interactions.csv contains
+seed-level AUC differences-in-differences relative to the first declared level on each axis.
+Four corner cells must have identical seed sets. Intervals are exploratory and unadjusted
+for multiplicity. Nonparallel interaction lines alone are not statistical proof of an interaction.
 Select settings on search seeds, freeze config, and assess them on held-out confirmatory seeds.
 Study results apply to CartPole-v1 and the explicitly recorded implementations/settings.
 """

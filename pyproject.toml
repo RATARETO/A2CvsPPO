@@ -22,6 +22,9 @@ dev = ["pytest==8.4.2", "ruff==0.14.2"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+a2c_research = ["compatibility.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --tb=short"

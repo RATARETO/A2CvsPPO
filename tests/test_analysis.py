@@ -41,8 +41,11 @@ def test_reference_import_is_read_only_and_never_certifies_comparison(tmp_path, 
     assert manifest["loaded_runs"] == 4
     assert manifest["comparisons"] == 0
     assert source.read_bytes() == before
-    assert len(list((tmp_path / "analysis").glob("*.png"))) == 4
-    assert len(list((tmp_path / "analysis").glob("*.pdf"))) == 4
+    figures = list((tmp_path / "analysis").glob("*.png"))
+    assert len([path for path in figures if path.stem.endswith("_seeds")]) == 2
+    assert len([path for path in figures if path.stem.endswith("_metrics")]) == 2
+    assert any("compare_baseline" in path.stem for path in figures)
+    assert {p.stem for p in figures} == {p.stem for p in (tmp_path / "analysis").glob("*.pdf")}
     assert (tmp_path / "analysis/summary.csv").exists()
 
 

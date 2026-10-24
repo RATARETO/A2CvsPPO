@@ -1,0 +1,11 @@
+{
+  "legacy_source_to_training": {
+    "587dfb96a045d6a9f3861e212337bc3e0fea76679a2541cb947df568456867dd": "648563fd203bb356075d3bf9cd74699a5223d5390d96a05863c19ad7066917cd"
+  },
+  "audit": {
+    "original_git_revision": "b9e1f85",
+    "scope": "Existing cartpole-stability-v1 results from the original project snapshot only",
+    "reason": "Configuration defaults, model construction, rollout/evaluation callbacks and RNG handling unchanged. Changes in train.py concern metadata and cache compatibility only.",
+    "policy": "Unknown historical source hashes remain separate. Never infer compatibility from a protocol label alone."
+  }
+}

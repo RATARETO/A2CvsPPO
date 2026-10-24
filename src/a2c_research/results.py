@@ -5,11 +5,13 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
 from .config import PROTOCOL, ExperimentConfig, canonical_json
-from .io import file_hash
+from .design import TOP_FACTORS, run_design
+from .io import file_hash, training_identity
 from .metrics import curve_metrics
 
 
@@ -28,8 +30,18 @@ class Run:
 def read_curve(path: Path) -> list[dict]:
     with path.open(encoding="utf-8-sig", newline="") as stream:
         rows = list(csv.DictReader(stream))
-    return [{"timesteps": int(row["timesteps"]),
-             "eval_sampled_mean": float(row["eval_sampled_mean"])} for row in rows]
+    result = []
+    for row in rows:
+        point = {"timesteps": int(row["timesteps"]),
+                 "eval_sampled_mean": float(row["eval_sampled_mean"])}
+        for key in ("eval_greedy_mean", "train_return_mean", "updates", "entropy_loss",
+                    "value_loss", "explained_variance", "approx_kl", "clip_fraction"):
+            if row.get(key):
+                value = float(row[key])
+                if math.isfinite(value):
+                    point[key] = value
+        result.append(point)
+    return result
 
 
 def condition_spec(config: dict, metadata: dict, curve: list[dict], protocol: str) -> dict:
@@ -38,13 +50,15 @@ def condition_spec(config: dict, metadata: dict, curve: list[dict], protocol: st
         versions["stable-baselines3"] = versions.pop("stable_baselines3")
     # Algorithm-specific optimizers/rollouts are deliberately not matched: they are
     # part of the declared implementations being compared, not controlled away.
-    return {"protocol": protocol,
+    design = run_design(config, metadata)
+    varied = set(design["factors"]) & TOP_FACTORS
+    return {"protocol": protocol, "factors": design["factors"],
             "conditions": {key: config.get(key) for key in (
                 "phase", "env_id", "total_timesteps", "n_envs", "net_arch", "activation",
                 "eval_freq", "n_eval_episodes", "final_eval_episodes", "eval_seed",
-                "final_eval_seed", "threshold", "sustain_evals")},
+                "final_eval_seed", "threshold", "sustain_evals") if key not in varied},
             "versions": versions,
-            "source_sha256": metadata.get("runtime", {}).get("source_sha256"),
+            "training_sha256": training_identity(metadata),
             "grid": [point["timesteps"] for point in curve]}
 
 
@@ -94,6 +108,8 @@ def load_runs(roots: list[Path]) -> tuple[list[Run], list[dict]]:
                 if not 0 <= value <= 500:
                     raise ValueError("Invalid independent final evaluation")
             metrics["final_eval_sampled_mean"] = value
+            metrics["final_above_threshold"] = (int(value >= cfg.get("threshold", 475.0))
+                                                 if value is not None else None)
             spec = condition_spec(cfg, metadata, curve, protocol)
             stratum = hashlib.sha256(canonical_json(spec).encode()).hexdigest()[:12]
             identity = (stratum, cfg["algo"], cfg["group"], cfg["name"], cfg["seed"])

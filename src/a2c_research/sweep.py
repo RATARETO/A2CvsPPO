@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 from pathlib import Path
 
-from .config import ExperimentConfig
-from .experiments import PRIMARY_GROUPS, build_configs
+from .config import ExperimentConfig, canonical_json
+from .design import training_key
+from .experiments import build_configs, declared_design, suite_groups
 from .io import write_json
 
 
@@ -49,7 +51,9 @@ def execute(configs: list[ExperimentConfig], root: Path, workers: int = 1,
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--algo", choices=("a2c", "ppo"), default="a2c")
-    parser.add_argument("--groups", nargs="+", default=PRIMARY_GROUPS)
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--groups", nargs="+")
+    selection.add_argument("--suite", choices=("primary", "ofat", "grids", "all"), default=None)
     parser.add_argument("--seeds", type=int, nargs="+")
     parser.add_argument("--phase", choices=("pilot", "search", "confirmatory"), default="search")
     parser.add_argument("--config", type=Path, help="Frozen selected configuration for held-out seeds")
@@ -57,6 +61,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--list", action="store_true", help="Print plan without training or writing files")
+    parser.add_argument("--summary", action="store_true", help="Compact per-series plan instead of all configs")
     parser.add_argument("--quick", action="store_true", help="Smoke run; not article evidence")
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
@@ -67,9 +72,13 @@ def main() -> None:
     seeds = args.seeds if args.seeds is not None else (
         list(range(1000, 1020)) if args.phase == "confirmatory"
         else list(range(3 if args.phase == "pilot" else 5)))
+    if len(set(seeds)) != len(seeds):
+        parser.error("--seeds must contain unique numbers")
     if args.phase == "confirmatory" and args.config is None:
         parser.error("Freeze a selected config first; confirmatory runs require --config")
     if args.config:
+        if args.groups or args.suite:
+            parser.error("--config cannot be combined with --groups/--suite")
         data = json.loads(args.config.read_text(encoding="utf-8"))
         base = ExperimentConfig(**data.get("config", data))
         configs = [replace(base, seed=seed, phase=args.phase) for seed in seeds]
@@ -77,7 +86,7 @@ def main() -> None:
             parser.error("Set the budget in the frozen --config, not --steps")
     else:
         common = {"total_timesteps": args.steps} if args.steps is not None else {}
-        groups, phase = args.groups, args.phase
+        groups, phase = args.groups or suite_groups(args.algo, args.suite or "primary"), args.phase
         if args.quick:
             if args.steps is not None:
                 parser.error("--quick uses a fixed smoke budget")
@@ -85,17 +94,22 @@ def main() -> None:
             common = dict(total_timesteps=10_240, eval_freq=2_560,
                           n_eval_episodes=2, final_eval_episodes=3)
         configs = build_configs(args.algo, groups, seeds, phase, **common)
-    plan = {"runs": len(configs), "configs": [cfg.to_dict() for cfg in configs]}
-    print(json.dumps(plan, ensure_ascii=False, indent=2))
+    plan = {"runs": len(configs), "configs": [cfg.to_dict() for cfg in configs],
+            "unique_training_conditions": len({training_key(cfg) for cfg in configs}),
+            "designs": {cfg.group: declared_design(cfg) for cfg in configs}}
+    if args.summary:
+        for group in dict.fromkeys(cfg.group for cfg in configs):
+            selected = [cfg for cfg in configs if cfg.group == group]
+            print(f"{group}: {len(selected) // len(seeds)} configurations, {len(selected)} runs")
+        print(f"Total: {len(configs)} run slots, {plan['unique_training_conditions']} distinct seeded conditions. "
+              "Repeated controls remain labelled by series; slots are not independent replicates.")
+    else:
+        print(json.dumps(plan, ensure_ascii=False, indent=2))
     if args.list:
         return
     root = args.out or Path("results_quick" if args.quick else f"results_{args.phase}")
     root.mkdir(parents=True, exist_ok=True)
     # Content-addressed plan files preserve earlier series when new groups are run.
-    import hashlib
-
-    from .config import canonical_json
-
     digest = hashlib.sha256(canonical_json(plan).encode()).hexdigest()[:12]
     write_json(root / f"plan_{digest}.json", plan)
     failures = execute(configs, root, args.workers, args.force)
