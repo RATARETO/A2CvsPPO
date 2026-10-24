@@ -41,7 +41,7 @@ def source_hash() -> str:
 def training_hash() -> str:
     """Hash training/config/evaluation ASTs; retain full source provenance separately."""
     digest = hashlib.sha256()
-    for name in ("config.py", "evaluation.py", "train.py"):
+    for name in ("config.py", "envs.py", "evaluation.py", "train.py"):
         path = Path(__file__).with_name(name)
         digest.update(name.encode())
         digest.update(ast.dump(ast.parse(path.read_text(encoding="utf-8"))).encode())
@@ -50,12 +50,13 @@ def training_hash() -> str:
 
 def training_identity(metadata: dict) -> str:
     runtime = metadata.get("runtime", {})
-    if runtime.get("training_sha256"):
-        return runtime["training_sha256"]
     old_hash = runtime.get("source_sha256")
     manifest = Path(__file__).with_name("compatibility.json")
     mapping = json.loads(manifest.read_text(encoding="utf-8")) if manifest.exists() else {}
-    return mapping.get("legacy_source_to_training", {}).get(old_hash, f"unverified:{old_hash}")
+    identity = (runtime.get("training_sha256") or mapping.get(
+        "legacy_source_to_training", {}).get(old_hash, f"unverified:{old_hash}"))
+    protocol = metadata.get("config", {}).get("protocol", "cartpole-stability-v1")
+    return mapping.get("training_aliases", {}).get(protocol, {}).get(identity, identity)
 
 
 def runtime_metadata() -> dict:

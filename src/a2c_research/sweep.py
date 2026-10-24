@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .config import ExperimentConfig, canonical_json
 from .design import training_key
+from .envs import ENVIRONMENTS
 from .experiments import build_configs, declared_design, suite_groups
 from .io import write_json
 
@@ -37,7 +38,7 @@ def execute(configs: list[ExperimentConfig], root: Path, workers: int = 1,
         for cfg, future in tasks:
             try:
                 result = future.result() if future is not None else _run_one(cfg, root, force)
-                print(f"OK {cfg.algo}/{cfg.group}/{cfg.name}/seed_{cfg.seed}: "
+                print(f"OK {cfg.env_id}/{cfg.algo}/{cfg.group}/{cfg.name}/seed_{cfg.seed}: "
                       f"sampled={result['final_eval_sampled_mean']:.1f}", flush=True)
             except Exception as error:
                 failures.append({"config": cfg.to_dict(), "error": str(error)})
@@ -51,9 +52,10 @@ def execute(configs: list[ExperimentConfig], root: Path, workers: int = 1,
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--algo", choices=("a2c", "ppo"), default="a2c")
+    parser.add_argument("--env", choices=list(ENVIRONMENTS))
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--groups", nargs="+")
-    selection.add_argument("--suite", choices=("primary", "ofat", "grids", "all"), default=None)
+    selection.add_argument("--suite", choices=("primary", "core", "ofat", "grids", "all"), default=None)
     parser.add_argument("--seeds", type=int, nargs="+")
     parser.add_argument("--phase", choices=("pilot", "search", "confirmatory"), default="search")
     parser.add_argument("--config", type=Path, help="Frozen selected configuration for held-out seeds")
@@ -81,17 +83,21 @@ def main() -> None:
             parser.error("--config cannot be combined with --groups/--suite")
         data = json.loads(args.config.read_text(encoding="utf-8"))
         base = ExperimentConfig(**data.get("config", data))
+        if args.env and args.env != base.env_id:
+            parser.error("--env must match a frozen --config")
         configs = [replace(base, seed=seed, phase=args.phase) for seed in seeds]
         if args.steps is not None:
             parser.error("Set the budget in the frozen --config, not --steps")
     else:
-        common = {"total_timesteps": args.steps} if args.steps is not None else {}
+        common = {"env_id": args.env or "CartPole-v1"}
+        if args.steps is not None:
+            common["total_timesteps"] = args.steps
         groups, phase = args.groups or suite_groups(args.algo, args.suite or "primary"), args.phase
         if args.quick:
             if args.steps is not None:
                 parser.error("--quick uses a fixed smoke budget")
             groups, seeds, phase = ["baseline"], [0], "pilot"
-            common = dict(total_timesteps=10_240, eval_freq=2_560,
+            common.update(total_timesteps=10_240, eval_freq=2_560,
                           n_eval_episodes=2, final_eval_episodes=3)
         configs = build_configs(args.algo, groups, seeds, phase, **common)
     plan = {"runs": len(configs), "configs": [cfg.to_dict() for cfg in configs],

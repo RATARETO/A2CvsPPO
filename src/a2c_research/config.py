@@ -9,6 +9,8 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
+from .envs import environment_defaults, environment_spec
+
 PROTOCOL = "cartpole-stability-v1"
 DEFAULTS = {
     "a2c": dict(learning_rate=7e-4, n_steps=5, gamma=0.99, gae_lambda=1.0,
@@ -44,15 +46,17 @@ class ExperimentConfig:
     final_eval_episodes: int = 30
     eval_seed: int = 1_000_000
     final_eval_seed: int = 2_000_000
-    threshold: float = 475.0
+    threshold: float | None = 475.0
     sustain_evals: int = 2
     algo_params: dict[str, Any] = field(default_factory=dict)
+    policy_params: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.algo not in DEFAULTS:
             raise ValueError("algo must be a2c or ppo")
-        if self.protocol != PROTOCOL or self.env_id != "CartPole-v1":
-            raise ValueError("This protocol supports CartPole-v1 only")
+        spec = environment_spec(self.env_id)
+        if self.protocol != spec.protocol:
+            raise ValueError("Environment/protocol mismatch; use environment_config for a new environment")
         if self.phase not in {"pilot", "search", "confirmatory"}:
             raise ValueError("Unknown experimental phase")
         for label in ("group", "name"):
@@ -80,8 +84,18 @@ class ExperimentConfig:
             raise ValueError("Invalid policy architecture")
         if any(type(n) is not int or n <= 0 for n in self.net_arch):
             raise ValueError("Network widths must be positive integers")
-        if not math.isfinite(self.threshold) or not 0 < self.threshold <= 500:
-            raise ValueError("threshold must be in (0, 500]")
+        if self.threshold is not None and (not math.isfinite(self.threshold)
+                or not spec.return_low < self.threshold <= spec.return_high):
+            raise ValueError("threshold must lie within the environment return bounds")
+        if self.env_id == "CartPole-v1" and self.threshold is None:
+            raise ValueError("The existing CartPole protocol requires a threshold")
+        if set(self.policy_params) - {"log_std_init"}:
+            raise ValueError("Only log_std_init is supported in policy_params")
+        if self.policy_params and spec.action_kind != "continuous":
+            raise ValueError("Continuous policy parameters require continuous actions")
+        for value in self.policy_params.values():
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ValueError("Policy parameters must be finite numbers")
         unknown = self.algo_params.keys() - DEFAULTS[self.algo].keys()
         if unknown:
             raise ValueError(f"Unsupported {self.algo} parameters: {sorted(unknown)}")
@@ -121,10 +135,14 @@ class ExperimentConfig:
         return {**DEFAULTS[self.algo], **self.algo_params}
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        result = asdict(self)
+        if not self.policy_params:
+            result.pop("policy_params")  # Preserve all existing CartPole fingerprints.
+        return result
 
     def run_dir(self, root: Path | str) -> Path:
-        return Path(root) / self.algo / self.group / self.name / f"seed_{self.seed}"
+        base = Path(root) if self.env_id == "CartPole-v1" else Path(root) / self.env_id
+        return base / self.algo / self.group / self.name / f"seed_{self.seed}"
 
     def fingerprint(self) -> str:
         return hashlib.sha256(canonical_json(self.to_dict()).encode()).hexdigest()
@@ -137,6 +155,11 @@ def make_config(algo: str, group: str, overrides: dict[str, Any], seed: int,
     params = {k: v for k, v in overrides.items() if k not in config_fields}
     name = ",".join(f"{k}={v:g}" if isinstance(v, float) else f"{k}={v}"
                     for k, v in overrides.items()) or "default"
-    return ExperimentConfig(**{**common, **top, "algo": algo, "group": group,
+    defaults = environment_defaults(common.get("env_id", "CartPole-v1"))
+    return ExperimentConfig(**{**defaults, **common, **top, "algo": algo, "group": group,
                                "name": name, "seed": seed, "sweep_index": sweep_index,
                                "algo_params": params})
+
+
+def environment_config(env_id: str = "CartPole-v1", **overrides: Any) -> ExperimentConfig:
+    return ExperimentConfig(**{**environment_defaults(env_id), **overrides})

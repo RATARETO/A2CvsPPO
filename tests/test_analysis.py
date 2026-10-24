@@ -1,3 +1,4 @@
+import csv
 import json
 import shutil
 from copy import deepcopy
@@ -47,6 +48,9 @@ def test_reference_import_is_read_only_and_never_certifies_comparison(tmp_path, 
     assert any("compare_baseline" in path.stem for path in figures)
     assert {p.stem for p in figures} == {p.stem for p in (tmp_path / "analysis").glob("*.pdf")}
     assert (tmp_path / "analysis/summary.csv").exists()
+    with (tmp_path / "analysis/runtime_summary.csv").open() as stream:
+        timings = list(csv.DictReader(stream))
+    assert all(row["n_timed"] == "0" and not row["mean_learn_elapsed_sec"] for row in timings)
 
 
 def test_duplicate_copies_do_not_increase_sample_size(tmp_path, legacy_root):

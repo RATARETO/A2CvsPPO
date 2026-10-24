@@ -15,7 +15,8 @@ from stable_baselines3 import A2C, PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 
-from .config import ExperimentConfig
+from .config import ExperimentConfig, environment_config
+from .envs import ENVIRONMENTS, environment_spec
 from .evaluation import evaluate
 from .experiments import declared_design
 from .io import file_hash, runtime_metadata, training_identity, write_csv, write_json
@@ -108,17 +109,30 @@ def run_experiment(cfg: ExperimentConfig, results_root: Path | str = "results",
         activation = {"tanh": torch.nn.Tanh, "relu": torch.nn.ReLU}[cfg.activation]
         model = {"a2c": A2C, "ppo": PPO}[cfg.algo](
             "MlpPolicy", train_env, seed=cfg.seed, device="cpu", verbose=0,
-            policy_kwargs={"net_arch": cfg.net_arch, "activation_fn": activation},
+            policy_kwargs={"net_arch": cfg.net_arch, "activation_fn": activation,
+                           **cfg.policy_params},
             **cfg.resolved_params(),
         )
         optimizer = model.policy.optimizer
+        spec = environment_spec(cfg.env_id)
+        if train_env.envs[0].spec.max_episode_steps != spec.horizon:
+            raise RuntimeError("Installed environment horizon differs from the declared protocol")
+        action = train_env.action_space
+        action_spec = ({"type": "Box", "low": action.low.tolist(), "high": action.high.tolist(),
+                        "shape": list(action.shape), "handling": "SB3 clips to Box bounds"}
+                       if spec.action_kind == "continuous" else {"type": "Discrete", "n": int(action.n)})
         optimizer_spec = {"class": type(optimizer).__name__,
                           "defaults": {key: value for key, value in optimizer.defaults.items()
                                        if isinstance(value, (float, int, bool, str, tuple))
                                        or value is None}}
         metadata = {"config": cfg.to_dict(), "config_sha256": cfg.fingerprint(),
                     "effective_hyperparams": cfg.resolved_params(),
-                    "policy_kwargs": {"net_arch": cfg.net_arch, "activation": cfg.activation},
+                    "policy_kwargs": {"net_arch": cfg.net_arch, "activation": cfg.activation,
+                                      **cfg.policy_params},
+                    "environment": spec.to_dict(), "action_space": action_spec,
+                    "action_distribution": type(model.policy.action_dist).__name__,
+                    "use_sde": bool(model.use_sde),
+                    "deterministic_policy": "mean then clip" if spec.action_kind == "continuous" else "argmax",
                     "optimizer": optimizer_spec, "versions": runtime["versions"],
                     "design": declared_design(cfg),
                     "runtime": runtime, "created_utc": datetime.now(timezone.utc).isoformat()}
@@ -134,6 +148,7 @@ def run_experiment(cfg: ExperimentConfig, results_root: Path | str = "results",
         write_csv(run_dir / "final_episodes.csv", final["episodes"])
         summary = {
             "algo": cfg.algo, "group": cfg.group, "name": cfg.name, "seed": cfg.seed,
+            "env_id": cfg.env_id,
             "protocol": cfg.protocol, "phase": cfg.phase,
             "timesteps_done": int(model.num_timesteps),
             "final_eval_mean": final["eval_greedy_mean"],
@@ -162,15 +177,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, help="ExperimentConfig JSON, saved config.json also accepted")
     parser.add_argument("--algo", choices=("a2c", "ppo"), default=None)
+    parser.add_argument("--env", choices=list(ENVIRONMENTS))
     parser.add_argument("--seed", type=int)
     parser.add_argument("--phase", choices=("pilot", "search", "confirmatory"))
     parser.add_argument("--steps", type=int)
     parser.add_argument("--set", action="append", default=[], metavar="PARAM=JSON_VALUE")
+    parser.add_argument("--policy-set", action="append", default=[], metavar="PARAM=JSON_VALUE")
     parser.add_argument("--out", type=Path, default=Path("results"))
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     data = json.loads(args.config.read_text(encoding="utf-8")) if args.config else {}
-    cfg = ExperimentConfig(**data.get("config", data))
+    cfg = (ExperimentConfig(**data.get("config", data)) if args.config
+           else environment_config(args.env or "CartPole-v1"))
+    if args.config and args.env and args.env != cfg.env_id:
+        parser.error("--env must match a frozen --config")
     changes = {key: value for key, value in {
         "algo": args.algo, "seed": args.seed, "phase": args.phase,
         "total_timesteps": args.steps}.items() if value is not None}
@@ -180,7 +200,13 @@ def main() -> None:
         if not separator:
             parser.error("--set requires PARAM=JSON_VALUE")
         params[key] = json.loads(value)
-    cfg = replace(cfg, **changes, algo_params=params)
+    policy = dict(cfg.policy_params)
+    for item in args.policy_set:
+        key, separator, value = item.partition("=")
+        if not separator:
+            parser.error("--policy-set requires PARAM=JSON_VALUE")
+        policy[key] = json.loads(value)
+    cfg = replace(cfg, **changes, algo_params=params, policy_params=policy)
     result = run_experiment(cfg, args.out, args.force)
     print(json.dumps(result, indent=2))
 

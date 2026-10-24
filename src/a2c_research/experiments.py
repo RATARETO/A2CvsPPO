@@ -48,13 +48,16 @@ SWEEPS = {
                                    "n_epochs", [3, 10, 20, 40])},
 }
 PRIMARY_GROUPS = ["baseline", "learning_rate", "n_steps", "gae_lambda", "ent_coef"]
+CORE_GROUPS = [*PRIMARY_GROUPS, "grid_lr_steps", "grid_lr_entropy"]
 
 
 def suite_groups(algo: str, suite: str) -> list[str]:
-    if suite not in {"primary", "ofat", "grids", "all"}:
+    if suite not in {"primary", "core", "ofat", "grids", "all"}:
         raise ValueError("Unknown experiment suite")
     if suite == "primary":
         return list(PRIMARY_GROUPS)
+    if suite == "core":
+        return list(CORE_GROUPS)
     return [name for name in SWEEPS[algo]
             if suite == "all" or (suite == "grids") == (series_design(algo, name)["kind"] == "grid")]
 

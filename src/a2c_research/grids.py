@@ -7,8 +7,9 @@ from itertools import product
 
 import numpy as np
 
-from .config import PROTOCOL, canonical_json
+from .config import canonical_json
 from .design import factor_values, group_runs, run_design
+from .envs import is_versioned
 from .metrics import bootstrap_mean
 
 
@@ -36,6 +37,7 @@ def grid_tables(runs: list, repetitions: int, seed: int) -> tuple[list, list]:
             continue
         axes, levels, cells = grid_data(items)
         common = dict(stratum=stratum, algo=algo, group=group, family=family,
+                      env_id=items[0].config["env_id"],
                       axis_x=axes[0], axis_y=axes[1])
         for a, b in product(*levels):
             selected = cells.get((canonical_json(a), canonical_json(b)), [])
@@ -49,7 +51,8 @@ def grid_tables(runs: list, repetitions: int, seed: int) -> tuple[list, list]:
             if selected:
                 row["auc_seed_std"] = (float(np.std([r.metrics["auc"] for r in selected], ddof=1))
                                        if len(selected) > 1 else None)
-                row["ever_reached_rate"] = float(np.mean([r.metrics["ever_reached"] for r in selected]))
+                known = [r.metrics["ever_reached"] for r in selected if r.metrics["ever_reached"] is not None]
+                row["ever_reached_rate"] = float(np.mean(known)) if known else None
             table.append(row)
         if not all(levels):
             continue
@@ -94,7 +97,7 @@ def sensitivity_audit(runs: list, sensitivity: list) -> list:
             row.update(a2c_auc_range=a.get("auc_range"), ppo_auc_range=b.get("auc_range"),
                        a2c_levels=canonical_json(levels[0]), ppo_levels=canonical_json(levels[1]),
                        ranges_match=levels[0] == levels[1])
-            if any(collection[0].protocol != PROTOCOL for collection in items):
+            if any(not is_versioned(collection[0].protocol) for collection in items):
                 row["reason"] = "Unversioned reference results"
             elif not all("auc_range" in value for value in (a, b)):
                 row["reason"] = "Missing levels or unequal seed sets within a series"

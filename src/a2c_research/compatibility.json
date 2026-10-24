@@ -6,6 +6,12 @@
     "original_git_revision": "b9e1f85",
     "scope": "Existing cartpole-stability-v1 results from the original project snapshot only",
     "reason": "Configuration defaults, model construction, rollout/evaluation callbacks and RNG handling unchanged. Changes in train.py concern metadata and cache compatibility only.",
-    "policy": "Unknown historical source hashes remain separate. Never infer compatibility from a protocol label alone."
+    "policy": "Unknown historical source hashes remain separate. Never infer compatibility from a protocol label alone.",
+    "multi_environment_extension": "CartPole-only alias: empty policy_params omitted from legacy fingerprints; original model construction and evaluation trajectories retained. Other environments have separate protocols."
+  },
+  "training_aliases": {
+    "cartpole-stability-v1": {
+      "648563fd203bb356075d3bf9cd74699a5223d5390d96a05863c19ad7066917cd": "af11763c905077bec3bf468e8e691a3230776c21a33d2267195c2ed6d797155a"
+    }
   }
 }

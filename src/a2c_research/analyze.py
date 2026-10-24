@@ -12,14 +12,16 @@ import numpy as np
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 
-from .config import PROTOCOL, canonical_json
+from .config import canonical_json
 from .design import family_key, group_runs, run_design
+from .envs import is_versioned
 from .grids import grid_tables, sensitivity_audit
 from .io import source_hash, write_csv, write_json
 from .metrics import bootstrap_mean, difference_ci, success_interval
+from .plotting import configure_return_axis
 from .results import Run, condition_spec, load_runs
 
-MEASURES = ("auc", "final_eval_sampled_mean", "last_window_mean", "max_drawdown",
+MEASURES = ("auc", "auc_return", "final_eval_sampled_mean", "last_window_mean", "max_drawdown",
             "post_solve_drawdown", "post_solve_below_threshold_fraction", "temporal_rms_change",
             "restricted_confirmation_steps")
 
@@ -32,6 +34,7 @@ def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list,
     summary = []
     for (stratum, algo, group, family, name), items in sorted(configurations.items()):
         row = dict(stratum=stratum, algo=algo, group=group, family=family, name=name,
+                   env_id=items[0].config["env_id"],
                    phase=items[0].config.get("phase", "legacy"),
                    n_seeds=len(items), protocol=items[0].protocol,
                    design_kind=run_design(items[0].config, items[0].metadata)["kind"])
@@ -40,10 +43,12 @@ def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list,
             if values:
                 row.update({f"{measure}_{key}": value for key, value in
                             bootstrap_mean(values, repetitions, seed).items()})
-        solved = sum(r.metrics["solved"] for r in items)
-        row["solved_rate"] = solved / len(items)
-        row["solved_ci_low"], row["solved_ci_high"] = success_interval(solved, len(items))
-        row["n_censored"] = len(items) - solved
+        known = [r.metrics["solved"] for r in items if r.metrics["solved"] is not None]
+        row["solved_n"] = len(known)
+        row["solved_rate"] = sum(known) / len(known) if known else None
+        row["solved_ci_low"], row["solved_ci_high"] = (success_interval(sum(known), len(known))
+                                                        if known else (None, None))
+        row["n_censored"] = len(known) - sum(known) if known else None
         for flag in ("ever_reached", "retained_at_end", "collapsed_after_success", "final_above_threshold"):
             values = [r.metrics[flag] for r in items if r.metrics.get(flag) is not None]
             if values:
@@ -66,6 +71,7 @@ def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list,
         expected = design.get("levels", {}).get(group, [])
         complete = not expected or len(by_name) == len(expected)
         row = dict(stratum=stratum, algo=algo, group=group, family=family,
+                   env_id=items[0].config["env_id"],
                    n_values=len(by_name), balanced_seeds=balanced,
                    complete_levels=complete,
                    values=canonical_json(sorted(by_name)))
@@ -88,7 +94,7 @@ def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list,
     candidates = defaultdict(lambda: defaultdict(list))
     for key, items in configurations.items():
         stratum, algo, group, family, name = key
-        if items[0].protocol == PROTOCOL:
+        if is_versioned(items[0].protocol):
             candidates[(stratum, group, name)][algo].append(items)
     for (stratum, group, name), algorithms in sorted(candidates.items()):
         if any(len(algorithms.get(algo, [])) != 1 for algo in ("a2c", "ppo")):
@@ -99,6 +105,7 @@ def summarize(runs: list[Run], repetitions: int, seed: int) -> tuple[list, list,
                       for items in (a, b))
             if av and bv:
                 comparisons.append({"stratum": stratum, "group": group, "name": name,
+                                    "env_id": a[0].config["env_id"],
                                     "metric": metric, "n_a2c": len(av), "n_ppo": len(bv),
                                     **difference_ci(av, bv, repetitions, seed)})
     return summary, sensitivity, comparisons
@@ -129,13 +136,11 @@ def plot_curves(runs: list[Run], out: Path, repetitions: int, seed: int) -> None
                 for curve in y:
                     axes[1].plot(t, curve, alpha=0.45, color=color, linewidth=0.8)
             for axis in axes:
-                axis.axhline(items[0].config.get("threshold", 475), color="black", ls="--", lw=0.8)
-                axis.set(xlabel="Training environment transitions", ylabel="Sampled policy return",
-                         ylim=(0, 510))
+                configure_return_axis(axis, items[0].config)
             axes[0].set_title("Mean; pointwise 95% CI where n >= 2")
             axes[1].set_title("Individual training runs")
             axes[0].legend(fontsize=7, loc="best")
-            fig.suptitle(f"{algo.upper()} | {group} | {items[0].config.get('phase', 'legacy')} | {stratum}")
+            fig.suptitle(f"{items[0].config['env_id']} | {algo.upper()} | {group} | {items[0].config.get('phase', 'legacy')} | {stratum}")
             stem = f"{stratum}_{algo}_{group}_{family}"
             fig.savefig(out / f"{stem}.png", dpi=180)
             fig.savefig(out / f"{stem}.pdf")
@@ -165,7 +170,7 @@ def plot_metrics(runs: list[Run], out: Path, repetitions: int, seed: int) -> Non
                         axis.vlines(index, stats["ci_low"], stats["ci_high"], color="black")
                 axis.set_xticks(range(len(names)), names, rotation=55, ha="right", fontsize=7)
                 axis.set_ylabel(label)
-            fig.suptitle(f"{algo.upper()} | {group} | {stratum}: runs, mean and 95% CI")
+            fig.suptitle(f"{items[0].config['env_id']} | {algo.upper()} | {group} | {stratum}: runs, mean and 95% CI")
             stem = f"{stratum}_{algo}_{group}_{family}_metrics"
             fig.savefig(out / f"{stem}.png", dpi=180)
             fig.savefig(out / f"{stem}.pdf")
@@ -186,11 +191,27 @@ def analyze(roots: list[Path], out: Path, repetitions: int = 2000, seed: int = 2
     grid_cells, interactions = grid_tables(runs, repetitions, seed)
     sensitivity_checks = sensitivity_audit(runs, sensitivity)
     write_csv(out / "runs.csv", [{"path": str(r.path), "stratum": r.stratum,
+                                  "env_id": r.config["env_id"],
                                   "protocol": r.protocol, "algo": r.config["algo"],
                                   "group": r.config["group"], "name": r.config["name"],
                                   "seed": r.config["seed"], "phase": r.config.get("phase", "legacy"),
                                   **r.metrics} for r in runs])
     write_csv(out / "summary.csv", summary)
+    runtime_groups = defaultdict(list)
+    for run in runs:
+        runtime_groups[(run.stratum, run.config["env_id"], run.config["algo"],
+                        run.config["group"])].append(run.summary.get("train_time_sec"))
+    runtime_rows = []
+    for (stratum, env, algo, group), values in sorted(runtime_groups.items()):
+        known = [float(value) for value in values if type(value) in (int, float)
+                 and np.isfinite(value) and value >= 0]
+        runtime_rows.append({"stratum": stratum, "env_id": env, "algo": algo, "group": group,
+                             "n_runs": len(values), "n_timed": len(known),
+                             "mean_learn_elapsed_sec": float(np.mean(known)) if known else None,
+                             "min_learn_elapsed_sec": min(known) if known else None,
+                             "max_learn_elapsed_sec": max(known) if known else None,
+                             "note": "Includes periodic evaluation and CSV IO; concurrency affects elapsed time"})
+    write_csv(out / "runtime_summary.csv", runtime_rows)
     # Always replace empty tables too: stale comparisons must never survive a new report.
     for name, rows in (("sensitivity.csv", sensitivity), ("comparison.csv", comparisons),
                        ("grid_cells.csv", grid_cells), ("interactions.csv", interactions),
@@ -210,6 +231,9 @@ def analyze(roots: list[Path], out: Path, repetitions: int = 2000, seed: int = 2
     manifest["grid_cells"] = len(grid_cells)
     manifest["missing_grid_cells"] = sum(row["status"] == "missing" for row in grid_cells)
     manifest["interaction_contrasts"] = len(interactions)
+    manifest["environments"] = sorted({r.config["env_id"] for r in runs})
+    manifest["criterion_not_defined"] = sorted({r.config["env_id"] for r in runs
+                                               if not r.metrics["criterion_defined"]})
     manifest["sensitivity_range_audit"] = sensitivity_checks
     write_json(out / "analysis.json", manifest)
     if plots:
@@ -242,7 +266,12 @@ Success-rate intervals use Wilson's method. Curve bands are pointwise, not simul
 Differences are A2C minus PPO using independently resampled runs. Intervals are descriptive,
 without adjustment for multiple comparisons; they do not establish general superiority.
 
-AUC = trapezoidal integral of sampled mean return over actual steps / (500 * budget).
+AUC_return = trapezoidal integral of sampled mean return over actual steps / budget.
+AUC normalizes that value using the environment-specific declared return bounds.
+CartPole retains its original integral / (500 * budget) definition exactly.
+Return bounds are task-local display scales, not equal task difficulty or universal benchmarks.
+Pendulum's upper bound zero does not imply an attainable optimum from random initial states.
+Do not pool raw rewards or normalized scores across environments into an overall ranking here.
 last_window_mean averages the last five curve points; final_eval_sampled_mean uses a
 separate fixed set of evaluation episodes. They are different endpoints.
 Solved = first sequence of sustain_evals consecutive mean returns >= threshold.
@@ -271,7 +300,10 @@ seed-level AUC differences-in-differences relative to the first declared level o
 Four corner cells must have identical seed sets. Intervals are exploratory and unadjusted
 for multiplicity. Nonparallel interaction lines alone are not statistical proof of an interaction.
 Select settings on search seeds, freeze config, and assess them on held-out confirmatory seeds.
-Study results apply to CartPole-v1 and the explicitly recorded implementations/settings.
+Without a declared threshold, success/retention/censoring endpoints are not applicable,
+not failures. The default Pendulum pilot has no success threshold. Its deterministic
+policy uses the Gaussian mean with Box clipping; historical greedy columns keep their names.
+Study results apply only to each recorded environment, protocol and implementation.
 """
     (out / "report.md").write_text(report, encoding="utf-8")
     return manifest

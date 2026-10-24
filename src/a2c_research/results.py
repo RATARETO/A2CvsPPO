@@ -9,8 +9,9 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import PROTOCOL, ExperimentConfig, canonical_json
+from .config import ExperimentConfig, canonical_json
 from .design import TOP_FACTORS, run_design
+from .envs import environment_spec, is_versioned
 from .io import file_hash, training_identity
 from .metrics import curve_metrics
 
@@ -56,7 +57,8 @@ def condition_spec(config: dict, metadata: dict, curve: list[dict], protocol: st
             "conditions": {key: config.get(key) for key in (
                 "phase", "env_id", "total_timesteps", "n_envs", "net_arch", "activation",
                 "eval_freq", "n_eval_episodes", "final_eval_episodes", "eval_seed",
-                "final_eval_seed", "threshold", "sustain_evals") if key not in varied},
+                "final_eval_seed", "threshold", "sustain_evals", "policy_params") if key not in varied},
+            "environment": environment_spec(config["env_id"]).to_dict(),
             "versions": versions,
             "training_sha256": training_identity(metadata),
             "grid": [point["timesteps"] for point in curve]}
@@ -70,7 +72,8 @@ def load_runs(roots: list[Path]) -> tuple[list[Run], list[dict]]:
             raise ValueError(f"Results directory does not exist: {root}")
     runs, audit, seen = [], [], {}
     paths = sorted({path.resolve() for root in roots
-                    for path in root.glob("*/*/*/seed_*/config.json")})
+                    for pattern in ("*/*/*/seed_*/config.json", "*/*/*/*/seed_*/config.json")
+                    for path in root.glob(pattern)})
     for config_path in paths:
         path = config_path.parent
         try:
@@ -81,11 +84,10 @@ def load_runs(roots: list[Path]) -> tuple[list[Run], list[dict]]:
             cfg = metadata["config"]
             summary = json.loads((path / "summary.json").read_text(encoding="utf-8"))
             protocol = cfg.get("protocol", "reference-unversioned")
-            if cfg["env_id"] != "CartPole-v1":
-                raise ValueError("Only CartPole-v1 is covered by this analysis protocol")
+            env = environment_spec(cfg["env_id"])
             if cfg["algo"] not in {"a2c", "ppo"}:
                 raise ValueError("Unknown algorithm")
-            if protocol == PROTOCOL:
+            if is_versioned(protocol):
                 validated = ExperimentConfig(**cfg)
                 if metadata.get("config_sha256") != validated.fingerprint():
                     raise ValueError("Configuration checksum mismatch")
@@ -101,15 +103,17 @@ def load_runs(roots: list[Path]) -> tuple[list[Run], list[dict]]:
             curve = [row for row in curve if row["timesteps"] <= budget]
             metrics = curve_metrics([r["timesteps"] for r in curve],
                                     [r["eval_sampled_mean"] for r in curve], budget,
-                                    cfg.get("threshold", 475.0), cfg.get("sustain_evals", 2))
+                                    cfg.get("threshold", env.threshold), cfg.get("sustain_evals", 2),
+                                    cfg["env_id"])
             value = summary.get("final_eval_sampled_mean")
             if value is not None:
                 value = float(value)
-                if not 0 <= value <= 500:
+                if not env.return_low - 1e-6 <= value <= env.return_high + 1e-6:
                     raise ValueError("Invalid independent final evaluation")
             metrics["final_eval_sampled_mean"] = value
-            metrics["final_above_threshold"] = (int(value >= cfg.get("threshold", 475.0))
-                                                 if value is not None else None)
+            threshold = cfg.get("threshold", env.threshold)
+            metrics["final_above_threshold"] = (int(value >= threshold)
+                                                 if value is not None and threshold is not None else None)
             spec = condition_spec(cfg, metadata, curve, protocol)
             stratum = hashlib.sha256(canonical_json(spec).encode()).hexdigest()[:12]
             identity = (stratum, cfg["algo"], cfg["group"], cfg["name"], cfg["seed"])
@@ -130,7 +134,7 @@ def load_runs(roots: list[Path]) -> tuple[list[Run], list[dict]]:
             seen[identity] = digest
             runs.append(Run(path, cfg, metadata, summary, curve, metrics, protocol, stratum))
             audit.append({"path": str(path), "status": "loaded", "stratum": stratum,
-                          "reason": ("Versioned protocol" if protocol == PROTOCOL
+                          "reason": ("Versioned protocol" if is_versioned(protocol)
                                      else "Legacy protocol: descriptive analysis only")})
         except (OSError, ValueError, KeyError, TypeError) as error:
             audit.append({"path": str(path), "status": "excluded", "reason": str(error)})

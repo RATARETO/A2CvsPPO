@@ -29,6 +29,7 @@ def evaluate(model, env_id: str, seed_start: int, episodes: int) -> dict:
     was_training = model.policy.training
     with isolated_rng():
         env = gym.make(env_id)
+        continuous = isinstance(env.action_space, gym.spaces.Box)
         try:
             for deterministic in (False, True):
                 for episode in range(episodes):
@@ -38,15 +39,24 @@ def evaluate(model, env_id: str, seed_start: int, episodes: int) -> dict:
                     torch.manual_seed(seed)
                     observation, _ = env.reset(seed=seed)
                     total, length, done = 0.0, 0, False
+                    action_min, action_max = float("inf"), float("-inf")
                     while not done:
                         action, _ = model.predict(observation, deterministic=deterministic)
+                        if continuous:
+                            if not env.action_space.contains(action):
+                                raise ValueError("Predicted continuous action is outside the Box bounds")
+                            action_min = min(action_min, float(np.min(action)))
+                            action_max = max(action_max, float(np.max(action)))
                         observation, reward, terminated, truncated, _ = env.step(action)
                         total += float(reward)
                         length += 1
                         done = terminated or truncated
-                    rows.append({"policy": "greedy" if deterministic else "sampled",
-                                 "episode": episode, "episode_seed": seed,
-                                 "return": total, "length": length})
+                    row = {"policy": "greedy" if deterministic else "sampled",
+                           "episode": episode, "episode_seed": seed,
+                           "return": total, "length": length}
+                    if continuous:
+                        row.update(action_min=action_min, action_max=action_max)
+                    rows.append(row)
         finally:
             env.close()
             model.policy.set_training_mode(was_training)

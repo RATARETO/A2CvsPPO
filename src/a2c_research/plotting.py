@@ -14,11 +14,21 @@ from matplotlib import pyplot as plt
 
 from .config import canonical_json
 from .design import factor_values, family_key, group_runs, run_design
+from .envs import environment_spec, return_limits
 from .grids import grid_data, ordered_levels
 from .metrics import bootstrap_mean
 from .results import condition_spec
 
 COLORS = {"a2c": "tab:orange", "ppo": "tab:blue"}
+
+
+def configure_return_axis(axis, config):
+    spec = environment_spec(config["env_id"])
+    threshold = config.get("threshold", spec.threshold)
+    if threshold is not None:
+        axis.axhline(threshold, color="grey", ls="--", lw=0.7)
+    axis.set(xlabel="Training transitions", ylabel="Sampled return",
+             ylim=return_limits(config["env_id"]))
 
 
 def label(value) -> str:
@@ -67,13 +77,13 @@ def plot_seeds(items, out, stem, repetitions, seed):
         selected = sorted((r for r in items if r.config["name"] == name),
                           key=lambda r: r.config["seed"])
         curve(axis, selected, "black", f"mean, n={len(selected)}", repetitions, seed, True)
-        axis.axhline(items[0].config.get("threshold", 475), color="grey", ls="--", lw=0.7)
-        axis.set(title=name, xlabel="Training transitions", ylabel="Sampled return", ylim=(0, 510))
+        configure_return_axis(axis, items[0].config)
+        axis.set_title(name)
         axis.title.set_fontsize(8)
         axis.legend(fontsize=6, ncols=2)
     for axis in list(axes.flat)[len(names):]:
         axis.set_visible(False)
-    fig.suptitle(f"{items[0].config['algo'].upper()} | {items[0].config['group']}: seed trajectories")
+    fig.suptitle(f"{items[0].config['env_id']} | {items[0].config['algo'].upper()} | {items[0].config['group']}: seed trajectories")
     return save(fig, out, f"{stem}_seeds")
 
 
@@ -106,20 +116,26 @@ def plot_diagnostics(items, out, stem):
     for axis in list(axes.flat)[len(keys):]:
         axis.set_visible(False)
     axes.flat[0].legend(fontsize=6, ncols=2)
-    fig.suptitle(f"{items[0].config['algo'].upper()} | {items[0].config['group']}: last logged diagnostics")
+    fig.suptitle(f"{items[0].config['env_id']} | {items[0].config['algo'].upper()} | {items[0].config['group']}: last logged diagnostics")
     return save(fig, out, f"{stem}_diagnostics")
 
 
 def plot_grid(items, out, stem, repetitions, seed):
     axes_names, levels, cells = grid_data(items)
+    spec = environment_spec(items[0].config["env_id"])
     specifications = [("auc", "Normalized AUC", "viridis", 0, 1),
-                      ("final_eval_sampled_mean", "Independent final return", "viridis", 0, 500),
+                      ("final_eval_sampled_mean", "Independent final return", "viridis", spec.return_low, spec.return_high),
                       ("retained_at_end", "Retained at curve end: fraction", "viridis", 0, 1),
-                      ("max_drawdown", "Max drawdown", "viridis_r", 0, 500),
+                      ("max_drawdown", "Max drawdown", "viridis_r", 0, spec.return_high - spec.return_low),
                       ("auc_std", "AUC sample std across seeds", "viridis_r", 0, None),
                       ("count", "Training runs per cell", "Blues", 0, None)]
     fig, axes = plt.subplots(2, 3, figsize=(14, 8), constrained_layout=True)
     for axis, (metric, title, cmap, low, high) in zip(axes.flat, specifications):
+        if metric == "retained_at_end" and items[0].config.get("threshold", spec.threshold) is None:
+            axis.set_title("Retention criterion not defined")
+            axis.text(0.5, 0.5, "Not applicable in this pilot", ha="center", va="center")
+            axis.set_axis_off()
+            continue
         matrix = np.full((len(levels[1]), len(levels[0])), np.nan)
         for i, a in enumerate(levels[0]):
             for j, b in enumerate(levels[1]):
@@ -154,7 +170,7 @@ def plot_grid(items, out, stem, repetitions, seed):
                 axis.text(i, j, text, ha="center", va="center", fontsize=7,
                           bbox={"facecolor": "white", "alpha": 0.65, "edgecolor": "none"})
         fig.colorbar(im, ax=axis, shrink=0.8)
-    fig.suptitle(f"{items[0].config['algo'].upper()} | {items[0].config['group']} | {items[0].stratum}")
+    fig.suptitle(f"{spec.env_id} | {items[0].config['algo'].upper()} | {items[0].config['group']} | {items[0].stratum}")
     paths = save(fig, out, f"{stem}_heatmap")
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5), constrained_layout=True)
     for swapped, axis in enumerate(axes):
@@ -202,13 +218,12 @@ def plot_comparisons(runs, out, repetitions, seed):
                 color = COLORS[algo] if group == "baseline" else plt.get_cmap("tab20")(index % 20)
                 curve(axis, collection, color, f"{algo.upper()} {name} (n={len(collection)})",
                       repetitions, seed)
-            axis.axhline(items[0].config.get("threshold", 475), color="grey", ls="--", lw=0.6)
-            axis.set(xlabel="Training transitions", ylabel="Sampled return", ylim=(0, 510))
+            configure_return_axis(axis, items[0].config)
             axis.legend(fontsize=6)
             if group != "baseline":
                 axis.set_title(algo.upper())
         qualifier = "descriptive legacy data" if items[0].protocol == "reference-unversioned" else "matched common conditions"
-        fig.suptitle(f"A2C / PPO | {group} | {stratum}: {qualifier}")
+        fig.suptitle(f"{items[0].config['env_id']} | A2C / PPO | {group} | {stratum}: {qualifier}")
         paths += save(fig, out, f"{stratum}_compare_{group}")
     return paths
 
@@ -264,7 +279,7 @@ def plot_overviews(runs, summary, sensitivity, out, sensitivity_checks):
             axis.legend(fontsize=7)
         for axis in list(axes.flat)[len(groups):]:
             axis.set_visible(False)
-        fig.suptitle(f"OFAT overview | {items[0].config.get('phase', 'legacy')} | per-series controls")
+        fig.suptitle(f"{items[0].config['env_id']} | OFAT overview | {items[0].config.get('phase', 'legacy')} | per-series controls")
         paths += save(fig, out, f"overview_{context_index}_all_params")
         selected = [row for row in sensitivity if (row["stratum"], row["family"]) in stratum_families
                     and "auc_range" in row]
