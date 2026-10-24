@@ -34,6 +34,9 @@ ENVIRONMENTS = {
                                   None, 102_400, 5_120),
 }
 
+# Pilot presets are retained above. Main budgets are fixed after the budget pilot.
+MAIN_BUDGETS = {"CartPole-v1": 51_200, "Acrobot-v1": 102_400, "Pendulum-v1": 204_800}
+
 
 def environment_spec(env_id: str) -> EnvironmentSpec:
     if env_id not in ENVIRONMENTS:
@@ -45,9 +48,10 @@ def is_versioned(protocol: str) -> bool:
     return protocol in {spec.protocol for spec in ENVIRONMENTS.values()}
 
 
-def environment_defaults(env_id: str) -> dict:
+def environment_defaults(env_id: str, phase: str = "search") -> dict:
     spec = environment_spec(env_id)
-    result = dict(env_id=env_id, protocol=spec.protocol, total_timesteps=spec.total_timesteps,
+    budget = spec.total_timesteps if phase == "pilot" else MAIN_BUDGETS[env_id]
+    result = dict(env_id=env_id, protocol=spec.protocol, total_timesteps=budget,
                   eval_freq=spec.eval_freq, threshold=spec.threshold)
     if spec.action_kind == "continuous":
         result["policy_params"] = {"log_std_init": 0.0}

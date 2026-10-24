@@ -13,6 +13,12 @@
 [docs/MULTI_ENV_PROTOCOL.md](docs/MULTI_ENV_PROTOCOL.md). Прежние команды CartPole,
 серии и результаты сохранены. Без `--env` по-прежнему выбирается CartPole-v1.
 
+Основной этап на трёх средах зафиксирован в `configs/main_search_v1.json`.
+Порядок запуска, объём и анализ общего ядра: [docs/MAIN_STUDY.md](docs/MAIN_STUDY.md).
+Поисковые и подтверждающие запуски Pendulum теперь используют 204 800 шагов;
+пилот сохраняет 102 400. Предпросмотр: `python -m a2c_research.study --plan configs/main_search_v1.json --list`
+через интерпретатор `.venv`.
+
 ## Окружение
 
 Python **3.10**, Stable-Baselines3 **2.9.0**, Gymnasium **1.4.0**, PyTorch **2.10.0**,

@@ -155,11 +155,12 @@ def make_config(algo: str, group: str, overrides: dict[str, Any], seed: int,
     params = {k: v for k, v in overrides.items() if k not in config_fields}
     name = ",".join(f"{k}={v:g}" if isinstance(v, float) else f"{k}={v}"
                     for k, v in overrides.items()) or "default"
-    defaults = environment_defaults(common.get("env_id", "CartPole-v1"))
+    defaults = environment_defaults(common.get("env_id", "CartPole-v1"), common.get("phase", "search"))
     return ExperimentConfig(**{**defaults, **common, **top, "algo": algo, "group": group,
                                "name": name, "seed": seed, "sweep_index": sweep_index,
                                "algo_params": params})
 
 
 def environment_config(env_id: str = "CartPole-v1", **overrides: Any) -> ExperimentConfig:
-    return ExperimentConfig(**{**environment_defaults(env_id), **overrides})
+    return ExperimentConfig(**{**environment_defaults(env_id, overrides.get("phase", "search")),
+                               **overrides})

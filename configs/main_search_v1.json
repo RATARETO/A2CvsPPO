@@ -1,0 +1,787 @@
+{
+  "schema": "main-search-study-v1",
+  "phase": "search",
+  "suite": "core",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "training_sha256": "857b3fb116f1d31b8ce267897956b22ae289ca2ece249c291d42b6e85cbc8963",
+  "versions": {
+    "python": "3.10.22",
+    "stable-baselines3": "2.9.0",
+    "gymnasium": "1.4.0",
+    "torch": "2.10.0",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3",
+    "matplotlib": "3.10.8"
+  },
+  "base_configs": {
+    "CartPole-v1": {
+      "algo": "a2c",
+      "group": "baseline",
+      "name": "default",
+      "sweep_index": 0,
+      "seed": 0,
+      "phase": "search",
+      "protocol": "cartpole-stability-v1",
+      "env_id": "CartPole-v1",
+      "total_timesteps": 51200,
+      "n_envs": 1,
+      "net_arch": [
+        64,
+        64
+      ],
+      "activation": "tanh",
+      "eval_freq": 2560,
+      "n_eval_episodes": 10,
+      "final_eval_episodes": 30,
+      "eval_seed": 1000000,
+      "final_eval_seed": 2000000,
+      "threshold": 475.0,
+      "sustain_evals": 2,
+      "algo_params": {}
+    },
+    "Acrobot-v1": {
+      "algo": "a2c",
+      "group": "baseline",
+      "name": "default",
+      "sweep_index": 0,
+      "seed": 0,
+      "phase": "search",
+      "protocol": "acrobot-stability-v1",
+      "env_id": "Acrobot-v1",
+      "total_timesteps": 102400,
+      "n_envs": 1,
+      "net_arch": [
+        64,
+        64
+      ],
+      "activation": "tanh",
+      "eval_freq": 5120,
+      "n_eval_episodes": 10,
+      "final_eval_episodes": 30,
+      "eval_seed": 1000000,
+      "final_eval_seed": 2000000,
+      "threshold": -100.0,
+      "sustain_evals": 2,
+      "algo_params": {}
+    },
+    "Pendulum-v1": {
+      "algo": "a2c",
+      "group": "baseline",
+      "name": "default",
+      "sweep_index": 0,
+      "seed": 0,
+      "phase": "search",
+      "protocol": "pendulum-pilot-v1",
+      "env_id": "Pendulum-v1",
+      "total_timesteps": 204800,
+      "n_envs": 1,
+      "net_arch": [
+        64,
+        64
+      ],
+      "activation": "tanh",
+      "eval_freq": 5120,
+      "n_eval_episodes": 10,
+      "final_eval_episodes": 30,
+      "eval_seed": 1000000,
+      "final_eval_seed": 2000000,
+      "threshold": null,
+      "sustain_evals": 2,
+      "algo_params": {},
+      "policy_params": {
+        "log_std_init": 0.0
+      }
+    }
+  },
+  "algorithms": {
+    "a2c": {
+      "baseline_params": {
+        "learning_rate": 0.0007,
+        "n_steps": 5,
+        "gamma": 0.99,
+        "gae_lambda": 1.0,
+        "ent_coef": 0.0,
+        "vf_coef": 0.5,
+        "max_grad_norm": 0.5,
+        "normalize_advantage": false,
+        "use_rms_prop": true,
+        "rms_prop_eps": 1e-05
+      },
+      "series": {
+        "baseline": [
+          {}
+        ],
+        "learning_rate": [
+          {
+            "learning_rate": 1e-05
+          },
+          {
+            "learning_rate": 0.0001
+          },
+          {
+            "learning_rate": 0.0003
+          },
+          {
+            "learning_rate": 0.0007
+          },
+          {
+            "learning_rate": 0.001
+          },
+          {
+            "learning_rate": 0.003
+          },
+          {
+            "learning_rate": 0.01
+          }
+        ],
+        "n_steps": [
+          {
+            "n_steps": 5
+          },
+          {
+            "n_steps": 16
+          },
+          {
+            "n_steps": 64
+          },
+          {
+            "n_steps": 256
+          }
+        ],
+        "gae_lambda": [
+          {
+            "gae_lambda": 0.8
+          },
+          {
+            "gae_lambda": 0.9
+          },
+          {
+            "gae_lambda": 0.95
+          },
+          {
+            "gae_lambda": 0.99
+          },
+          {
+            "gae_lambda": 1.0
+          }
+        ],
+        "ent_coef": [
+          {
+            "ent_coef": 0.0
+          },
+          {
+            "ent_coef": 0.001
+          },
+          {
+            "ent_coef": 0.01
+          },
+          {
+            "ent_coef": 0.05
+          },
+          {
+            "ent_coef": 0.1
+          }
+        ],
+        "grid_lr_steps": [
+          {
+            "learning_rate": 0.0001,
+            "n_steps": 5
+          },
+          {
+            "learning_rate": 0.0001,
+            "n_steps": 16
+          },
+          {
+            "learning_rate": 0.0001,
+            "n_steps": 64
+          },
+          {
+            "learning_rate": 0.0001,
+            "n_steps": 256
+          },
+          {
+            "learning_rate": 0.0003,
+            "n_steps": 5
+          },
+          {
+            "learning_rate": 0.0003,
+            "n_steps": 16
+          },
+          {
+            "learning_rate": 0.0003,
+            "n_steps": 64
+          },
+          {
+            "learning_rate": 0.0003,
+            "n_steps": 256
+          },
+          {
+            "learning_rate": 0.0007,
+            "n_steps": 5
+          },
+          {
+            "learning_rate": 0.0007,
+            "n_steps": 16
+          },
+          {
+            "learning_rate": 0.0007,
+            "n_steps": 64
+          },
+          {
+            "learning_rate": 0.0007,
+            "n_steps": 256
+          },
+          {
+            "learning_rate": 0.003,
+            "n_steps": 5
+          },
+          {
+            "learning_rate": 0.003,
+            "n_steps": 16
+          },
+          {
+            "learning_rate": 0.003,
+            "n_steps": 64
+          },
+          {
+            "learning_rate": 0.003,
+            "n_steps": 256
+          }
+        ],
+        "grid_lr_entropy": [
+          {
+            "learning_rate": 0.0001,
+            "ent_coef": 0.0
+          },
+          {
+            "learning_rate": 0.0001,
+            "ent_coef": 0.001
+          },
+          {
+            "learning_rate": 0.0001,
+            "ent_coef": 0.01
+          },
+          {
+            "learning_rate": 0.0001,
+            "ent_coef": 0.05
+          },
+          {
+            "learning_rate": 0.0003,
+            "ent_coef": 0.0
+          },
+          {
+            "learning_rate": 0.0003,
+            "ent_coef": 0.001
+          },
+          {
+            "learning_rate": 0.0003,
+            "ent_coef": 0.01
+          },
+          {
+            "learning_rate": 0.0003,
+            "ent_coef": 0.05
+          },
+          {
+            "learning_rate": 0.0007,
+            "ent_coef": 0.0
+          },
+          {
+            "learning_rate": 0.0007,
+            "ent_coef": 0.001
+          },
+          {
+            "learning_rate": 0.0007,
+            "ent_coef": 0.01
+          },
+          {
+            "learning_rate": 0.0007,
+            "ent_coef": 0.05
+          },
+          {
+            "learning_rate": 0.003,
+            "ent_coef": 0.0
+          },
+          {
+            "learning_rate": 0.003,
+            "ent_coef": 0.001
+          },
+          {
+            "learning_rate": 0.003,
+            "ent_coef": 0.01
+          },
+          {
+            "learning_rate": 0.003,
+            "ent_coef": 0.05
+          }
+        ]
+      },
+      "designs": {
+        "baseline": {
+          "factors": [],
+          "linked": [],
+          "kind": "baseline",
+          "levels": {}
+        },
+        "learning_rate": {
+          "factors": [
+            "learning_rate"
+          ],
+          "linked": [],
+          "kind": "ofat",
+          "levels": {
+            "learning_rate": [
+              1e-05,
+              0.0001,
+              0.0003,
+              0.0007,
+              0.001,
+              0.003,
+              0.01
+            ]
+          }
+        },
+        "n_steps": {
+          "factors": [
+            "n_steps"
+          ],
+          "linked": [],
+          "kind": "ofat",
+          "levels": {
+            "n_steps": [
+              5,
+              16,
+              64,
+              256
+            ]
+          }
+        },
+        "gae_lambda": {
+          "factors": [
+            "gae_lambda"
+          ],
+          "linked": [],
+          "kind": "ofat",
+          "levels": {
+            "gae_lambda": [
+              0.8,
+              0.9,
+              0.95,
+              0.99,
+              1.0
+            ]
+          }
+        },
+        "ent_coef": {
+          "factors": [
+            "ent_coef"
+          ],
+          "linked": [],
+          "kind": "ofat",
+          "levels": {
+            "ent_coef": [
+              0.0,
+              0.001,
+              0.01,
+              0.05,
+              0.1
+            ]
+          }
+        },
+        "grid_lr_steps": {
+          "factors": [
+            "learning_rate",
+            "n_steps"
+          ],
+          "linked": [],
+          "kind": "grid",
+          "levels": {
+            "learning_rate": [
+              0.0001,
+              0.0003,
+              0.0007,
+              0.003
+            ],
+            "n_steps": [
+              5,
+              16,
+              64,
+              256
+            ]
+          }
+        },
+        "grid_lr_entropy": {
+          "factors": [
+            "learning_rate",
+            "ent_coef"
+          ],
+          "linked": [],
+          "kind": "grid",
+          "levels": {
+            "learning_rate": [
+              0.0001,
+              0.0003,
+              0.0007,
+              0.003
+            ],
+            "ent_coef": [
+              0.0,
+              0.001,
+              0.01,
+              0.05
+            ]
+          }
+        }
+      }
+    },
+    "ppo": {
+      "baseline_params": {
+        "learning_rate": 0.0003,
+        "n_steps": 2048,
+        "batch_size": 64,
+        "n_epochs": 10,
+        "gamma": 0.99,
+        "gae_lambda": 0.95,
+        "ent_coef": 0.0,
+        "vf_coef": 0.5,
+        "max_grad_norm": 0.5,
+        "normalize_advantage": true,
+        "clip_range": 0.2,
+        "clip_range_vf": null,
+        "target_kl": null
+      },
+      "series": {
+        "baseline": [
+          {}
+        ],
+        "learning_rate": [
+          {
+            "learning_rate": 1e-05
+          },
+          {
+            "learning_rate": 0.0001
+          },
+          {
+            "learning_rate": 0.0003
+          },
+          {
+            "learning_rate": 0.0007
+          },
+          {
+            "learning_rate": 0.001
+          },
+          {
+            "learning_rate": 0.003
+          },
+          {
+            "learning_rate": 0.01
+          }
+        ],
+        "n_steps": [
+          {
+            "n_steps": 64
+          },
+          {
+            "n_steps": 256
+          },
+          {
+            "n_steps": 1024
+          },
+          {
+            "n_steps": 2048
+          }
+        ],
+        "gae_lambda": [
+          {
+            "gae_lambda": 0.8
+          },
+          {
+            "gae_lambda": 0.9
+          },
+          {
+            "gae_lambda": 0.95
+          },
+          {
+            "gae_lambda": 0.99
+          },
+          {
+            "gae_lambda": 1.0
+          }
+        ],
+        "ent_coef": [
+          {
+            "ent_coef": 0.0
+          },
+          {
+            "ent_coef": 0.001
+          },
+          {
+            "ent_coef": 0.01
+          },
+          {
+            "ent_coef": 0.05
+          },
+          {
+            "ent_coef": 0.1
+          }
+        ],
+        "grid_lr_steps": [
+          {
+            "learning_rate": 0.0001,
+            "n_steps": 64
+          },
+          {
+            "learning_rate": 0.0001,
+            "n_steps": 256
+          },
+          {
+            "learning_rate": 0.0001,
+            "n_steps": 1024
+          },
+          {
+            "learning_rate": 0.0001,
+            "n_steps": 2048
+          },
+          {
+            "learning_rate": 0.0003,
+            "n_steps": 64
+          },
+          {
+            "learning_rate": 0.0003,
+            "n_steps": 256
+          },
+          {
+            "learning_rate": 0.0003,
+            "n_steps": 1024
+          },
+          {
+            "learning_rate": 0.0003,
+            "n_steps": 2048
+          },
+          {
+            "learning_rate": 0.0007,
+            "n_steps": 64
+          },
+          {
+            "learning_rate": 0.0007,
+            "n_steps": 256
+          },
+          {
+            "learning_rate": 0.0007,
+            "n_steps": 1024
+          },
+          {
+            "learning_rate": 0.0007,
+            "n_steps": 2048
+          },
+          {
+            "learning_rate": 0.003,
+            "n_steps": 64
+          },
+          {
+            "learning_rate": 0.003,
+            "n_steps": 256
+          },
+          {
+            "learning_rate": 0.003,
+            "n_steps": 1024
+          },
+          {
+            "learning_rate": 0.003,
+            "n_steps": 2048
+          }
+        ],
+        "grid_lr_entropy": [
+          {
+            "learning_rate": 0.0001,
+            "ent_coef": 0.0
+          },
+          {
+            "learning_rate": 0.0001,
+            "ent_coef": 0.001
+          },
+          {
+            "learning_rate": 0.0001,
+            "ent_coef": 0.01
+          },
+          {
+            "learning_rate": 0.0001,
+            "ent_coef": 0.05
+          },
+          {
+            "learning_rate": 0.0003,
+            "ent_coef": 0.0
+          },
+          {
+            "learning_rate": 0.0003,
+            "ent_coef": 0.001
+          },
+          {
+            "learning_rate": 0.0003,
+            "ent_coef": 0.01
+          },
+          {
+            "learning_rate": 0.0003,
+            "ent_coef": 0.05
+          },
+          {
+            "learning_rate": 0.0007,
+            "ent_coef": 0.0
+          },
+          {
+            "learning_rate": 0.0007,
+            "ent_coef": 0.001
+          },
+          {
+            "learning_rate": 0.0007,
+            "ent_coef": 0.01
+          },
+          {
+            "learning_rate": 0.0007,
+            "ent_coef": 0.05
+          },
+          {
+            "learning_rate": 0.003,
+            "ent_coef": 0.0
+          },
+          {
+            "learning_rate": 0.003,
+            "ent_coef": 0.001
+          },
+          {
+            "learning_rate": 0.003,
+            "ent_coef": 0.01
+          },
+          {
+            "learning_rate": 0.003,
+            "ent_coef": 0.05
+          }
+        ]
+      },
+      "designs": {
+        "baseline": {
+          "factors": [],
+          "linked": [],
+          "kind": "baseline",
+          "levels": {}
+        },
+        "learning_rate": {
+          "factors": [
+            "learning_rate"
+          ],
+          "linked": [],
+          "kind": "ofat",
+          "levels": {
+            "learning_rate": [
+              1e-05,
+              0.0001,
+              0.0003,
+              0.0007,
+              0.001,
+              0.003,
+              0.01
+            ]
+          }
+        },
+        "n_steps": {
+          "factors": [
+            "n_steps"
+          ],
+          "linked": [],
+          "kind": "ofat",
+          "levels": {
+            "n_steps": [
+              64,
+              256,
+              1024,
+              2048
+            ]
+          }
+        },
+        "gae_lambda": {
+          "factors": [
+            "gae_lambda"
+          ],
+          "linked": [],
+          "kind": "ofat",
+          "levels": {
+            "gae_lambda": [
+              0.8,
+              0.9,
+              0.95,
+              0.99,
+              1.0
+            ]
+          }
+        },
+        "ent_coef": {
+          "factors": [
+            "ent_coef"
+          ],
+          "linked": [],
+          "kind": "ofat",
+          "levels": {
+            "ent_coef": [
+              0.0,
+              0.001,
+              0.01,
+              0.05,
+              0.1
+            ]
+          }
+        },
+        "grid_lr_steps": {
+          "factors": [
+            "learning_rate",
+            "n_steps"
+          ],
+          "linked": [],
+          "kind": "grid",
+          "levels": {
+            "learning_rate": [
+              0.0001,
+              0.0003,
+              0.0007,
+              0.003
+            ],
+            "n_steps": [
+              64,
+              256,
+              1024,
+              2048
+            ]
+          }
+        },
+        "grid_lr_entropy": {
+          "factors": [
+            "learning_rate",
+            "ent_coef"
+          ],
+          "linked": [],
+          "kind": "grid",
+          "levels": {
+            "learning_rate": [
+              0.0001,
+              0.0003,
+              0.0007,
+              0.003
+            ],
+            "ent_coef": [
+              0.0,
+              0.001,
+              0.01,
+              0.05
+            ]
+          }
+        }
+      }
+    }
+  },
+  "interpretation": "Fixed-budget comparisons within each environment; no pooled reward ranking. No Pendulum success threshold. Confirmation uses a separate frozen selection.",
+  "plan_sha256": "ce985c2020e503411d9ebb8a2108766f79c46c47e2bc026cd0c45f64d529d19e"
+}

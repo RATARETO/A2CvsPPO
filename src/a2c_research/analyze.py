@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 from collections import defaultdict
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from .config import canonical_json
 from .design import family_key, group_runs, run_design
 from .envs import is_versioned
 from .grids import grid_tables, sensitivity_audit
-from .io import source_hash, write_csv, write_json
+from .io import source_hash, training_identity, write_csv, write_json
 from .metrics import bootstrap_mean, difference_ci, success_interval
 from .plotting import configure_return_axis
 from .results import Run, condition_spec, load_runs
@@ -179,11 +180,43 @@ def plot_metrics(runs: list[Run], out: Path, repetitions: int, seed: int) -> Non
 
 
 def analyze(roots: list[Path], out: Path, repetitions: int = 2000, seed: int = 2026,
-            plots: bool = True) -> dict:
+            plots: bool = True, study_plan: Path | None = None) -> dict:
     if repetitions < 100:
         raise ValueError("At least 100 bootstrap repetitions are required")
     out.mkdir(parents=True, exist_ok=True)
     runs, audit = load_runs(roots)
+    study_info = None
+    if study_plan is not None:
+        from .study import compile_study, read_study
+
+        frozen = read_study(study_plan)
+        expected = compile_study(frozen, check_runtime=False)
+        allowed = {cfg.fingerprint() for cfg in expected}
+        selected = []
+        outside = incompatible = 0
+        for run in runs:
+            identity = hashlib.sha256(canonical_json(run.config).encode()).hexdigest()
+            planned_training = training_identity({"config": run.config, "runtime": {
+                "training_sha256": frozen["training_sha256"]}})
+            if identity not in allowed:
+                outside += 1
+                status, reason = "outside_study", "Not part of the frozen main-study matrix"
+            elif (run.metadata.get("versions") != frozen["versions"]
+                  or training_identity(run.metadata) != planned_training):
+                incompatible += 1
+                status, reason = "excluded", "Training code or dependency versions differ from the frozen study"
+            else:
+                selected.append(run)
+                continue
+            for row in audit:
+                if row["path"] == str(run.path) and row["status"] == "loaded":
+                    row.update(status=status, reason=reason)
+        present = {hashlib.sha256(canonical_json(run.config).encode()).hexdigest() for run in selected}
+        study_info = {"path": str(study_plan.resolve()), "plan_sha256": frozen["plan_sha256"],
+                      "expected_runs": len(allowed), "loaded_runs": len(selected),
+                      "missing_or_invalid_runs": len(allowed - present),
+                      "outside_study_runs": outside, "incompatible_study_runs": incompatible}
+        runs = selected
     write_csv(out / "audit.csv", audit)
     if not runs:
         raise ValueError(f"No valid completed runs. See {out / 'audit.csv'}")
@@ -235,6 +268,8 @@ def analyze(roots: list[Path], out: Path, repetitions: int = 2000, seed: int = 2
     manifest["criterion_not_defined"] = sorted({r.config["env_id"] for r in runs
                                                if not r.metrics["criterion_defined"]})
     manifest["sensitivity_range_audit"] = sensitivity_checks
+    if study_info is not None:
+        manifest["study"] = study_info
     write_json(out / "analysis.json", manifest)
     if plots:
         from .plotting import plot_extended
@@ -244,12 +279,18 @@ def analyze(roots: list[Path], out: Path, repetitions: int = 2000, seed: int = 2
         manifest["extended_figures"] = plot_extended(runs, summary, sensitivity, out, repetitions, seed,
                                                      sensitivity_checks)
     write_json(out / "analysis.json", manifest)
+    coverage = ("Frozen study not selected." if study_info is None else
+                f"Frozen study coverage: {study_info['loaded_runs']}/{study_info['expected_runs']}; "
+                f"missing or invalid: {study_info['missing_or_invalid_runs']}; "
+                f"incompatible runtime excluded: {study_info['incompatible_study_runs']}; "
+                f"supplementary runs excluded: {study_info['outside_study_runs']}.")
     report = f"""# A2C / PPO: stability and hyperparameter sensitivity
 
 Loaded runs: {len(runs)}. Separate condition strata: {len(strata)}.
 Excluded runs: {manifest['excluded_runs']}; incomplete: {manifest['incomplete_runs']}.
 Planned runs not found: {manifest['missing_runs']}.
 Compatible configuration/metric comparisons: {len(comparisons)}.
+{coverage}
 
 See audit.csv for exclusions and analysis.json for exact comparison conditions.
 Only completed runs enter statistics. Missing/failed planned runs are not treated as
@@ -316,8 +357,10 @@ def main() -> None:
     parser.add_argument("--bootstrap", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--no-plots", action="store_true")
+    parser.add_argument("--study-plan", type=Path, help="Restrict analysis to a frozen main-study matrix")
     args = parser.parse_args()
-    manifest = analyze(args.results, args.out, args.bootstrap, args.seed, not args.no_plots)
+    manifest = analyze(args.results, args.out, args.bootstrap, args.seed, not args.no_plots,
+                       args.study_plan)
     print(f"Loaded {manifest['loaded_runs']} runs; {manifest['comparisons']} metric comparisons. "
           f"Report: {args.out / 'report.md'}")
 

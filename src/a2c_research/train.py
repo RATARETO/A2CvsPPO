@@ -188,7 +188,8 @@ def main() -> None:
     args = parser.parse_args()
     data = json.loads(args.config.read_text(encoding="utf-8")) if args.config else {}
     cfg = (ExperimentConfig(**data.get("config", data)) if args.config
-           else environment_config(args.env or "CartPole-v1"))
+           else environment_config(args.env or "CartPole-v1", phase=args.phase or "search",
+                                   seed=args.seed if args.seed is not None else 0))
     if args.config and args.env and args.env != cfg.env_id:
         parser.error("--env must match a frozen --config")
     changes = {key: value for key, value in {
